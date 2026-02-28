@@ -10,7 +10,12 @@ public static class DatabaseSeeder
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        await db.Database.MigrateAsync();
+        // In-memory SQLite has no migration history table; use EnsureCreated instead
+        var connString = db.Database.GetConnectionString();
+        if (connString != null && connString.Contains(":memory:"))
+            await db.Database.EnsureCreatedAsync();
+        else
+            await db.Database.MigrateAsync();
 
         // Seed Actors
         if (!await db.Actors.AnyAsync())

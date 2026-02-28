@@ -45,6 +45,8 @@ Log a post when something needs to survive beyond this session:
 
 **Do not log** routine implementation steps — only things with cross-session significance.
 
+**Bundle related items** — When multiple related items arise (e.g., several UI review points, a set of similar fixes), create a single issue with a checklist in the text rather than separate issues for each. This keeps the tracker focused and avoids noise.
+
 ---
 
 ## API Reference
