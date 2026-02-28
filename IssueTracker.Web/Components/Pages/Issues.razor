@@ -94,6 +94,13 @@
                                        OnClick="@(() => QuickAction(context.Item.Id, "Archive"))" />
                     </MudTooltip>
                 }
+                @if (context.Item.Status == "Closed" || context.Item.Status == "Deferred")
+                {
+                    <MudTooltip Text="Reopen">
+                        <MudIconButton Icon="@Icons.Material.Filled.Replay" Size="Size.Small"
+                                       OnClick="@(() => QuickAction(context.Item.Id, "Reopen"))" />
+                    </MudTooltip>
+                }
             </CellTemplate>
         </TemplateColumn>
         <TemplateColumn Sortable="false">
@@ -328,7 +335,12 @@
         try
         {
             var sessionId = selectedSessionId ?? sessions.LastOrDefault()?.Id ?? 1;
-            var defaultText = actionType == "Hold" ? "Deferred via quick action" : "Closed via quick action";
+            var defaultText = actionType switch
+            {
+                "Hold"   => "Deferred via quick action",
+                "Reopen" => "Reopened via quick action",
+                _        => "Closed via quick action"
+            };
 
             var postRequest = new
             {
@@ -342,7 +354,13 @@
             var response = await Http.PostAsJsonAsync("api/posts", postRequest);
             if (response.IsSuccessStatusCode)
             {
-                Snackbar.Add(actionType == "Hold" ? "Issue deferred" : "Issue closed", Severity.Success);
+                var successMsg = actionType switch
+                {
+                    "Hold"   => "Issue deferred",
+                    "Reopen" => "Issue reopened",
+                    _        => "Issue closed"
+                };
+                Snackbar.Add(successMsg, Severity.Success);
                 if (dataGrid is not null) await dataGrid.ReloadServerData();
             }
             else
@@ -484,6 +502,7 @@
         "Hold" => Color.Warning,
         "Archive" => Color.Success,
         "Check" => Color.Error,
+        "Reopen" => Color.Info,
         _ => Color.Default
     };
 

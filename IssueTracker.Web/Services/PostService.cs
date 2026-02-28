@@ -28,6 +28,7 @@ public class PostService(AppDbContext db)
                 {
                     "Hold"    => "Deferred",
                     "Archive" => "Closed",
+                    "Reopen"  => "Open",
                     _         => root.Status
                 };
             }

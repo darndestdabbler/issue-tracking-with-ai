@@ -120,6 +120,7 @@ curl.exe -s "http://localhost:5124/api/posts?tags=auth&status=Open&projectId=1"
 | Check             | Requesting Dennis to review (set toActorId: 2)       | (no change)           |
 | Hold              | Pausing/deferring work                               | → Deferred            |
 | Archive           | Closing/resolving an issue                           | → Closed              |
+| Reopen            | Reopening a closed or deferred issue                 | → Open                |
 
 ---
 
