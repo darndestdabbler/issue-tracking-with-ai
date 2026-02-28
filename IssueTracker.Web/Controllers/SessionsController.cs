@@ -17,8 +17,11 @@ public class SessionsController(AppDbContext db) : ControllerBase
             query = query.Where(s => s.ProjectId == projectId.Value);
         if (!includeArchived)
             query = query.Where(s => !s.IsArchived);
-        var sessions = await query.OrderByDescending(s => s.StartDate).ToListAsync();
-        return Ok(sessions.Select(s => new { s.Id, s.Name, s.ProjectId, projectName = s.Project.Name, s.StartDate, s.CreatedOn, s.IsArchived }));
+        var sessions = await query
+            .OrderByDescending(s => s.StartDate)
+            .Select(s => new { s.Id, s.Name, s.ProjectId, projectName = s.Project.Name, s.StartDate, s.CreatedOn, s.IsArchived, postCount = s.Posts.Count })
+            .ToListAsync();
+        return Ok(sessions);
     }
 
     [HttpGet("{id:int}")]

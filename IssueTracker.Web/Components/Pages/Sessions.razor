@@ -199,11 +199,6 @@
         try
         {
             sessions = await Http.GetFromJsonAsync<List<SessionDto>>($"api/sessions?projectId={selectedProjectId}") ?? new();
-            foreach (var session in sessions)
-            {
-                var posts = await Http.GetFromJsonAsync<List<object>>($"api/posts?sessionId={session.Id}");
-                session.PostCount = posts?.Count ?? 0;
-            }
         }
         catch (Exception ex)
         {

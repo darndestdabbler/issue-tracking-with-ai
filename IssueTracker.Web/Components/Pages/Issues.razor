@@ -39,7 +39,8 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" sm="3">
-            <MudSelect @bind-Value="selectedStatus" Label="Status" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+            <MudSelect T="string?" Value="selectedStatus" Label="Status" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter"
+                       ValueChanged="OnStatusChanged">
                 <MudSelectItem Value="@((string?)null)">All</MudSelectItem>
                 <MudSelectItem Value='@("Open")'>Open</MudSelectItem>
                 <MudSelectItem Value='@("Deferred")'>Deferred</MudSelectItem>
@@ -47,10 +48,11 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" sm="3">
-            <MudTextField @bind-Value="searchTags" Label="Tags (comma-delimited)" Variant="Variant.Outlined" />
+            <MudTextField @bind-Value="searchTags" Label="Tags (comma-delimited)" Variant="Variant.Outlined"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                          OnAdornmentClick="ApplyFilters" OnKeyDown="OnTagsKeyDown" />
         </MudItem>
     </MudGrid>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyFilters">Filter</MudButton>
 </MudPaper>
 
 <MudDataGrid @ref="dataGrid" T="PostDto" ServerData="LoadServerData" Hover="true" Bordered="true" Dense="true">
@@ -430,6 +432,18 @@
             Snackbar.Add($"Error loading issues: {ex.Message}", Severity.Error);
             return new GridData<PostDto> { Items = new List<PostDto>(), TotalItems = 0 };
         }
+    }
+
+    private async Task OnStatusChanged(string? newStatus)
+    {
+        selectedStatus = newStatus;
+        if (dataGrid is not null) await dataGrid.ReloadServerData();
+    }
+
+    private async Task OnTagsKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && dataGrid is not null)
+            await dataGrid.ReloadServerData();
     }
 
     private async Task ApplyFilters()

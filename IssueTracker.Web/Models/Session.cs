@@ -10,4 +10,5 @@ public class Session
     public bool IsArchived { get; set; }
 
     public Project Project { get; set; } = null!;
+    public ICollection<Post> Posts { get; set; } = [];
 }

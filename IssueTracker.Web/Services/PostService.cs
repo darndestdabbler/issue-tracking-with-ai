@@ -51,11 +51,11 @@ public class PostService(AppDbContext db)
         if (projectId.HasValue)
             query = query.Where(p => p.ProjectId == projectId.Value);
 
+        // Always filter to root posts (issues) — replies are shown via thread expansion
+        query = query.Where(p => p.ActionForId == null);
+
         if (!string.IsNullOrEmpty(status))
-        {
-            // Status only meaningful on root posts
-            query = query.Where(p => p.ActionForId == null && p.Status == status);
-        }
+            query = query.Where(p => p.Status == status);
 
         if (!string.IsNullOrEmpty(tags))
         {
@@ -84,8 +84,11 @@ public class PostService(AppDbContext db)
         if (projectId.HasValue)
             query = query.Where(p => p.ProjectId == projectId.Value);
 
+        // Always filter to root posts (issues) — replies are shown via thread expansion
+        query = query.Where(p => p.ActionForId == null);
+
         if (!string.IsNullOrEmpty(status))
-            query = query.Where(p => p.ActionForId == null && p.Status == status);
+            query = query.Where(p => p.Status == status);
 
         if (!string.IsNullOrEmpty(tags))
         {
@@ -124,24 +127,29 @@ public class PostService(AppDbContext db)
 
     public async Task<List<Post>> GetThreadAsync(int rootId)
     {
-        var all = new List<Post>();
-        await CollectThreadAsync(rootId, all);
-        return all.OrderBy(p => p.DateTime).ToList();
-    }
+        // Recursive CTE fetches the entire thread tree in a single query.
+        // SQLite requires WITH RECURSIVE; SQL Server uses WITH.
+        var isSqlite = db.Database.ProviderName?.Contains("Sqlite",
+            StringComparison.OrdinalIgnoreCase) == true;
+        var cteKeyword = isSqlite ? "WITH RECURSIVE" : "WITH";
 
-    private async Task CollectThreadAsync(int postId, List<Post> collected)
-    {
-        var post = await db.Posts
+        var sql = cteKeyword + """
+             ThreadCte AS (
+                SELECT "Id" FROM "Posts" WHERE "Id" = {0}
+                UNION ALL
+                SELECT p."Id" FROM "Posts" p
+                INNER JOIN ThreadCte t ON p."ActionForId" = t."Id"
+            )
+            SELECT p.* FROM "Posts" p
+            INNER JOIN ThreadCte t ON p."Id" = t."Id"
+            """;
+
+        return await db.Posts
+            .FromSqlRaw(sql, rootId)
             .Include(p => p.FromActor)
             .Include(p => p.ToActor)
-            .Include(p => p.Replies)
-            .FirstOrDefaultAsync(p => p.Id == postId);
-
-        if (post is null) return;
-
-        collected.Add(post);
-        foreach (var reply in post.Replies)
-            await CollectThreadAsync(reply.Id, collected);
+            .OrderBy(p => p.DateTime)
+            .ToListAsync();
     }
 
     public async Task<Post?> UpdatePostAsync(int id, string? title, string? tags, string? text)
