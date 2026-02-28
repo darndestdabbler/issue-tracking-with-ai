@@ -1,0 +1,143 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@isFormValid">
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="DialogParameters.SessionId" 
+                               Label="Session" 
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               RequiredError="Session is required">
+                        @foreach (var session in Sessions)
+                        {
+                            <MudSelectItem Value="@session.Id">@session.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="6">
+                    <MudSelect @bind-Value="DialogParameters.FromActorId"
+                               Label="From"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               RequiredError="From is required">
+                        @foreach (var actor in Actors)
+                        {
+                            <MudSelectItem Value="@actor.Id">@actor.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="6">
+                    <MudSelect @bind-Value="DialogParameters.ActionType"
+                               Label="Action Type"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               RequiredError="Action Type is required">
+                        <MudSelectItem Value="@("New")">New</MudSelectItem>
+                        <MudSelectItem Value="@("Discuss")">Discuss</MudSelectItem>
+                        <MudSelectItem Value="@("Proceed As Is")">Proceed As Is</MudSelectItem>
+                        <MudSelectItem Value="@("Proceed With Mods")">Proceed With Mods</MudSelectItem>
+                        <MudSelectItem Value="@("Check")">Check (Request Review)</MudSelectItem>
+                        <MudSelectItem Value="@("Hold")">Hold</MudSelectItem>
+                        <MudSelectItem Value="@("Archive")">Archive</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="DialogParameters.Title" 
+                                  Label="Title" 
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Required="true"
+                                  RequiredError="Title is required"
+                                  Placeholder="Brief title for the issue" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="DialogParameters.Text" 
+                                  Label="Description" 
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Lines="5"
+                                  Required="true"
+                                  RequiredError="Description is required"
+                                  Placeholder="Detailed description" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="DialogParameters.Tags" 
+                                  Label="Tags (comma-delimited)" 
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Placeholder="e.g. auth,security,token" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="DialogParameters.ToActorId" 
+                               Label="Assign to (optional)" 
+                               Variant="Variant.Outlined"
+                               Clearable="true">
+                        @foreach (var actor in Actors)
+                        {
+                            <MudSelectItem Value="@((int?)actor.Id)">@actor.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled" 
+                   OnClick="Submit" 
+                   Disabled="@(!isFormValid)">
+            Create Issue
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialogInstance { get; set; } = null!;
+
+    [Parameter] public List<SessionDto> Sessions { get; set; } = new();
+    [Parameter] public List<ActorDto> Actors { get; set; } = new();
+    [Parameter] public int? FilterSessionId { get; set; }
+
+    private CreateIssueRequest DialogParameters = new();
+    private MudForm? form;
+    private bool isFormValid = true;
+
+    protected override void OnInitialized()
+    {
+        if (FilterSessionId.HasValue)
+            DialogParameters.SessionId = FilterSessionId.Value;
+        else if (Sessions.Any())
+            DialogParameters.SessionId = Sessions.First().Id;
+
+        DialogParameters.ActionType = "New";
+        DialogParameters.FromActorId = 2; // Default to Human for UI-created issues
+    }
+
+    private async Task Submit()
+    {
+        if (form != null)
+        {
+            await form.Validate();
+            if (form.IsValid)
+            {
+                MudDialogInstance.Close(DialogResult.Ok(DialogParameters));
+            }
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialogInstance.Cancel();
+    }
+
+    // DTOs are provided by Components.SharedDtos.cs (SessionDto, ActorDto, CreateIssueRequest)
+}

@@ -1,0 +1,481 @@
+@page "/issues"
+
+@using IssueTracker.Web.Models
+@using IssueTracker.Web.Services
+@inject HttpClient Http
+@inject MudBlazor.ISnackbar Snackbar
+@inject MudBlazor.IDialogService DialogService
+@inject NavigationManager Nav
+
+<PageTitle>Issues</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">
+    @(projects.FirstOrDefault(p => p.Id == selectedProjectId)?.Name ?? "Issues") — Issues
+</MudText>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mb-3" OnClick="OpenCreateDialog">+ Create Issue</MudButton>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" sm="3">
+            <MudSelect T="int" Value="selectedProjectId" Label="Project"
+                       Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter"
+                       ValueChanged="OnProjectChanged">
+                @foreach (var p in projects)
+                {
+                    <MudSelectItem T="int" Value="@p.Id">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudSelect T="int?" Value="selectedSessionId" Label="Session"
+                       Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter"
+                       ValueChanged="OnSessionChanged">
+                <MudSelectItem T="int?" Value="@((int?)null)">All Sessions</MudSelectItem>
+                @foreach (var s in sessions)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)s.Id)">@s.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudSelect @bind-Value="selectedStatus" Label="Status" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                <MudSelectItem Value="@((string?)null)">All</MudSelectItem>
+                <MudSelectItem Value='@("Open")'>Open</MudSelectItem>
+                <MudSelectItem Value='@("Deferred")'>Deferred</MudSelectItem>
+                <MudSelectItem Value='@("Closed")'>Closed</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudTextField @bind-Value="searchTags" Label="Tags (comma-delimited)" Variant="Variant.Outlined" />
+        </MudItem>
+    </MudGrid>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyFilters">Filter</MudButton>
+</MudPaper>
+
+<MudDataGrid @ref="dataGrid" T="PostDto" ServerData="LoadServerData" Hover="true" Bordered="true" Dense="true">
+    <NoRecordsContent>
+        <MudText>No issues found.</MudText>
+    </NoRecordsContent>
+    <Columns>
+        <TemplateColumn Title="Title" SortLabel="title">
+            <CellTemplate>
+                <MudText>@context.Item.Title</MudText>
+                @if (!string.IsNullOrWhiteSpace(context.Item.Tags))
+                {
+                    <div class="mt-1">
+                        @foreach (var tag in context.Item.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" Class="mr-1">@tag</MudChip>
+                        }
+                    </div>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.Status" Title="Status" SortLabel="status" />
+        <PropertyColumn Property="x => x.ActionType" Title="Action" SortLabel="actiontype" />
+        <PropertyColumn Property="x => x.FromActor" Title="From" SortLabel="fromactor" />
+        <TemplateColumn Title="Date" SortLabel="datetime">
+            <CellTemplate>
+                <MudText>@context.Item.DateTime.ToString("yyyy-MM-dd HH:mm")</MudText>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                @if (context.Item.Status == "Open")
+                {
+                    <MudTooltip Text="Hold (Defer)">
+                        <MudIconButton Icon="@Icons.Material.Filled.Pause" Size="Size.Small"
+                                       OnClick="@(() => QuickAction(context.Item.Id, "Hold"))" />
+                    </MudTooltip>
+                }
+                @if (context.Item.Status == "Open" || context.Item.Status == "Deferred")
+                {
+                    <MudTooltip Text="Archive (Close)">
+                        <MudIconButton Icon="@Icons.Material.Filled.Archive" Size="Size.Small"
+                                       OnClick="@(() => QuickAction(context.Item.Id, "Archive"))" />
+                    </MudTooltip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Sortable="false">
+            <CellTemplate>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ToggleThread(context.Item.Id))">
+                    @(expandedId == context.Item.Id ? "Hide" : "Show") Thread
+                </MudButton>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <ChildRowContent>
+        @if (expandedId == context.Item.Id && threadPosts.Any())
+        {
+            <MudCard Class="mt-2 ml-4" Elevation="1">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.subtitle2">Thread</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTimeline>
+                        @foreach (var reply in threadPosts)
+                        {
+                            <MudTimelineItem Color="GetActionColor(reply.ActionType)">
+                                <MudText Typo="Typo.subtitle2">@reply.ActionType by @(reply.FromActor ?? "Unknown")</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Tertiary">@reply.DateTime.ToString("yyyy-MM-dd HH:mm:ss")</MudText>
+                                <MudText Class="mt-2">@reply.Text</MudText>
+                            </MudTimelineItem>
+                        }
+                    </MudTimeline>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               OnClick="@(() => OpenReplyDialog(context.Item.Id))">
+                        Reply
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Edit"
+                               OnClick="@(() => OpenEditDialog(context.Item))">
+                        Edit
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        }
+    </ChildRowContent>
+    <PagerContent>
+        <MudDataGridPager T="PostDto" PageSizeOptions="@(new int[] { 10, 25, 50 })" />
+    </PagerContent>
+</MudDataGrid>
+
+@code {
+    private MudDataGrid<PostDto> dataGrid = null!;
+    private List<PostDto> threadPosts = new();
+    private int? expandedId = null;
+    private string? selectedStatus = "Open";
+    private string? searchTags = "";
+
+    // Project/Session filter state
+    private List<ProjectDto> projects = new();
+    private int selectedProjectId;
+    private int? selectedSessionId = null;
+
+    // For dialogs
+    private List<SessionDto> sessions = new();
+    private List<ActorDto> actors = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load projects first
+        projects = await Http.GetFromJsonAsync<List<ProjectDto>>("api/projects") ?? new();
+
+        // Parse query string for projectId and sessionId
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("projectId", out var pid) && int.TryParse(pid.ToString(), out var projId))
+            selectedProjectId = projId;
+        else
+            selectedProjectId = projects.FirstOrDefault()?.Id ?? 0;
+
+        if (query.TryGetValue("sessionId", out var sid) && int.TryParse(sid.ToString(), out var sessId))
+            selectedSessionId = sessId;
+
+        await LoadSessions();
+        await LoadActors();
+        // Grid auto-calls LoadServerData on first render
+    }
+
+    private async Task OnProjectChanged(int newProjectId)
+    {
+        selectedProjectId = newProjectId;
+        selectedSessionId = null;
+        await LoadSessions();
+        if (dataGrid is not null) await dataGrid.ReloadServerData();
+    }
+
+    private async Task OnSessionChanged(int? newSessionId)
+    {
+        selectedSessionId = newSessionId;
+        if (dataGrid is not null) await dataGrid.ReloadServerData();
+    }
+
+    private async Task LoadSessions()
+    {
+        try
+        {
+            sessions = await Http.GetFromJsonAsync<List<SessionDto>>($"api/sessions?projectId={selectedProjectId}") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading sessions: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadActors()
+    {
+        try
+        {
+            actors = await Http.GetFromJsonAsync<List<ActorDto>>("api/actors") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading actors: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new MudBlazor.DialogParameters();
+        parameters.Add("Sessions", sessions);
+        parameters.Add("Actors", actors);
+        parameters.Add("FilterSessionId", selectedSessionId);
+
+        var dialog = await DialogService.ShowAsync<CreateIssueDialog>("Create New Issue", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            if (result.Data is CreateIssueRequest request)
+            {
+                await CreateIssue(request);
+            }
+        }
+    }
+
+    private async Task CreateIssue(CreateIssueRequest request)
+    {
+        try
+        {
+            var postRequest = new
+            {
+                sessionId = request.SessionId,
+                fromActorId = request.FromActorId,
+                actionType = request.ActionType,
+                title = request.Title,
+                text = request.Text,
+                tags = request.Tags,
+                toActorId = request.ToActorId
+            };
+
+            var response = await Http.PostAsJsonAsync("api/posts", postRequest);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Issue created successfully", Severity.Success);
+                if (dataGrid is not null) await dataGrid.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add($"Error creating issue: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error creating issue: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenReplyDialog(int rootPostId)
+    {
+        var parameters = new MudBlazor.DialogParameters();
+        parameters.Add("Sessions", sessions);
+        parameters.Add("Actors", actors);
+        parameters.Add("RootPostId", rootPostId);
+        parameters.Add("FilterSessionId", selectedSessionId);
+
+        var dialog = await DialogService.ShowAsync<ReplyDialog>("Reply to Issue", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            if (result.Data is ReplyRequest reply)
+            {
+                await SubmitReply(reply);
+            }
+        }
+    }
+
+    private async Task SubmitReply(ReplyRequest reply)
+    {
+        try
+        {
+            var postRequest = new
+            {
+                sessionId = reply.SessionId,
+                fromActorId = reply.FromActorId,
+                actionType = reply.ActionType,
+                actionForId = reply.ActionForId,
+                text = reply.Text,
+                toActorId = reply.ToActorId
+            };
+
+            var response = await Http.PostAsJsonAsync("api/posts", postRequest);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Reply added", Severity.Success);
+                await LoadThread(reply.ActionForId);
+                if (dataGrid is not null) await dataGrid.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add($"Error adding reply: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding reply: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task QuickAction(int postId, string actionType)
+    {
+        try
+        {
+            var sessionId = selectedSessionId ?? sessions.LastOrDefault()?.Id ?? 1;
+            var defaultText = actionType == "Hold" ? "Deferred via quick action" : "Closed via quick action";
+
+            var postRequest = new
+            {
+                sessionId,
+                fromActorId = 2, // Human
+                actionType,
+                actionForId = postId,
+                text = defaultText
+            };
+
+            var response = await Http.PostAsJsonAsync("api/posts", postRequest);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(actionType == "Hold" ? "Issue deferred" : "Issue closed", Severity.Success);
+                if (dataGrid is not null) await dataGrid.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add($"Error: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenEditDialog(PostDto post)
+    {
+        var parameters = new MudBlazor.DialogParameters();
+        parameters.Add("PostId", post.Id);
+        parameters.Add("Title", post.Title);
+        parameters.Add("Tags", post.Tags);
+        parameters.Add("Text", post.Text);
+
+        var dialog = await DialogService.ShowAsync<EditIssueDialog>("Edit Issue", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            if (result.Data is UpdatePostRequest request)
+            {
+                await SubmitEdit(post.Id, request);
+            }
+        }
+    }
+
+    private async Task SubmitEdit(int postId, UpdatePostRequest request)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"api/posts/{postId}", request);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Issue updated", Severity.Success);
+                await LoadThread(postId);
+                if (dataGrid is not null) await dataGrid.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add($"Error updating issue: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating issue: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task<GridData<PostDto>> LoadServerData(GridState<PostDto> state, CancellationToken ct)
+    {
+        try
+        {
+            var url = $"api/posts?projectId={selectedProjectId}&page={state.Page}&pageSize={state.PageSize}";
+
+            if (!string.IsNullOrEmpty(selectedStatus))
+                url += $"&status={selectedStatus}";
+            if (!string.IsNullOrEmpty(searchTags))
+                url += $"&tags={Uri.EscapeDataString(searchTags)}";
+            if (selectedSessionId.HasValue)
+                url += $"&sessionId={selectedSessionId.Value}";
+
+            var sortDef = state.SortDefinitions.FirstOrDefault();
+            if (sortDef is not null)
+            {
+                url += $"&sortBy={sortDef.SortBy}";
+                if (sortDef.Descending)
+                    url += "&sortDesc=true";
+            }
+
+            var response = await Http.GetFromJsonAsync<PagedResponse<PostDto>>(url, ct);
+
+            return new GridData<PostDto>
+            {
+                Items = response?.Items ?? new List<PostDto>(),
+                TotalItems = response?.TotalCount ?? 0
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Snackbar.Add($"Error loading issues: {ex.Message}", Severity.Error);
+            return new GridData<PostDto> { Items = new List<PostDto>(), TotalItems = 0 };
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        if (dataGrid is not null) await dataGrid.ReloadServerData();
+    }
+
+    private async Task ToggleThread(int postId)
+    {
+        if (expandedId == postId)
+        {
+            expandedId = null;
+            threadPosts.Clear();
+        }
+        else
+        {
+            expandedId = postId;
+            await LoadThread(postId);
+        }
+    }
+
+    private async Task LoadThread(int postId)
+    {
+        try
+        {
+            threadPosts = await Http.GetFromJsonAsync<List<PostDto>>($"api/posts/{postId}/thread") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading thread: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Color GetActionColor(string actionType) => actionType switch
+    {
+        "New" => Color.Info,
+        "Discuss" => Color.Secondary,
+        "Hold" => Color.Warning,
+        "Archive" => Color.Success,
+        "Check" => Color.Error,
+        _ => Color.Default
+    };
+
+    // PostDto, SessionDto, ActorDto provided by Components.SharedDtos.cs
+}

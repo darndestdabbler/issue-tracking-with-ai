@@ -1,0 +1,40 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="projectName"
+                      Label="Project Name"
+                      Variant="Variant.Outlined"
+                      FullWidth="true"
+                      Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="Submit" Disabled="@string.IsNullOrWhiteSpace(projectName)">
+            @(IsEdit ? "Save" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialogInstance { get; set; } = null!;
+    [Parameter] public int? ProjectId { get; set; }
+    [Parameter] public string? InitialName { get; set; }
+
+    private bool IsEdit => ProjectId.HasValue;
+    private string projectName = "";
+
+    protected override void OnInitialized()
+    {
+        projectName = InitialName ?? "";
+    }
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(projectName))
+            MudDialogInstance.Close(DialogResult.Ok(projectName));
+    }
+
+    private void Cancel() => MudDialogInstance.Cancel();
+}

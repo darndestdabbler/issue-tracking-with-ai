@@ -1,0 +1,82 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@isFormValid">
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="request.Title"
+                                  Label="Title"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Required="true"
+                                  RequiredError="Title is required" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="request.Tags"
+                                  Label="Tags (comma-delimited)"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Placeholder="e.g. auth,security,token" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="request.Text"
+                                  Label="Description"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Lines="5"
+                                  Required="true"
+                                  RequiredError="Description is required" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(!isFormValid)">
+            Save Changes
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialogInstance { get; set; } = null!;
+
+    [Parameter] public int PostId { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Tags { get; set; }
+    [Parameter] public string? Text { get; set; }
+
+    private UpdatePostRequest request = new();
+    private MudForm? form;
+    private bool isFormValid = true;
+
+    protected override void OnInitialized()
+    {
+        request.Title = Title;
+        request.Tags = Tags;
+        request.Text = Text;
+    }
+
+    private async Task Submit()
+    {
+        if (form != null)
+        {
+            await form.Validate();
+            if (form.IsValid)
+            {
+                MudDialogInstance.Close(DialogResult.Ok(request));
+            }
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialogInstance.Cancel();
+    }
+}

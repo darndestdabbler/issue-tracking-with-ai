@@ -1,0 +1,325 @@
+@page "/sessions"
+@page "/projects"
+
+@using System.Text.Json
+@inject HttpClient Http
+@inject MudBlazor.ISnackbar Snackbar
+@inject MudBlazor.IDialogService DialogService
+@inject NavigationManager Nav
+
+<PageTitle>Projects & Sessions</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true" Class="mb-4">Projects & Sessions</MudText>
+
+<MudGrid>
+    @* ---- Left column: Projects ---- *@
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="2">
+            <div style="display: flex; justify-content: space-between; align-items: center;" class="mb-3">
+                <MudText Typo="Typo.h6">Projects</MudText>
+                <MudTooltip Text="Add Project">
+                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                   Color="Color.Primary"
+                                   OnClick="OpenCreateProjectDialog" />
+                </MudTooltip>
+            </div>
+
+            @if (loadingProjects)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (projects.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info">No projects yet.</MudAlert>
+            }
+            else
+            {
+                <MudList T="int" @bind-SelectedValue="selectedProjectIdBinding">
+                    @foreach (var project in projects)
+                    {
+                        <MudListItem T="int" Value="@project.Id"
+                                     Icon="@Icons.Material.Filled.Folder"
+                                     Class="@(project.Id == selectedProjectId ? "mud-selected-item" : "")">
+                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <MudText>@project.Name</MudText>
+                                <div>
+                                    <span @onclick:stopPropagation="true">
+                                        <MudTooltip Text="View Issues">
+                                            <MudIconButton Icon="@Icons.Material.Filled.BugReport"
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => ViewProjectIssues(project.Id))" />
+                                        </MudTooltip>
+                                        <MudTooltip Text="Edit Project">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => OpenEditProjectDialog(project))" />
+                                        </MudTooltip>
+                                    </span>
+                                </div>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* ---- Right column: Sessions for selected project ---- *@
+    <MudItem xs="12" sm="8">
+        <MudPaper Class="pa-4" Elevation="2">
+            <div style="display: flex; justify-content: space-between; align-items: center;" class="mb-3">
+                <MudText Typo="Typo.h6">
+                    Sessions — @(SelectedProject?.Name ?? "Select a project")
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="@(() => showCreateSessionDialog = true)"
+                           Disabled="@(SelectedProject is null)">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" />New Session
+                </MudButton>
+            </div>
+
+            @if (SelectedProject is null)
+            {
+                <MudAlert Severity="Severity.Info">
+                    Select a project from the left to view its sessions.
+                </MudAlert>
+            }
+            else if (loadingSessions)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (sessions.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info">
+                    No sessions yet for this project.
+                </MudAlert>
+            }
+            else
+            {
+                <MudDataGrid Items="@sessions" Hover="true" Bordered="true" Dense="true">
+                    <Columns>
+                        <PropertyColumn Property="x => x.Name" Title="Name" />
+                        <TemplateColumn Title="Started">
+                            <CellTemplate>
+                                <MudText>@context.Item.StartDate.ToString("yyyy-MM-dd HH:mm")</MudText>
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <PropertyColumn Property="x => x.PostCount" Title="Posts" />
+                        <TemplateColumn Title="Actions">
+                            <CellTemplate>
+                                <MudButton Size="Size.Small" Variant="Variant.Text"
+                                    OnClick="@(() => ViewSessionIssues(context.Item.Id))">
+                                    View Issues
+                                </MudButton>
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Columns>
+                </MudDataGrid>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@* ---- Create Session overlay ---- *@
+@if (showCreateSessionDialog)
+{
+    <MudOverlay Visible="true" DarkBackground="true" OnClick="@(() => { showCreateSessionDialog = false; newSessionName = ""; })">
+        <MudPaper Class="pa-8" Style="max-width: 400px;" @onclick:stopPropagation="true">
+            <MudText Typo="Typo.h6" Class="mb-4">New Session</MudText>
+            <MudTextField @bind-Value="newSessionName" Immediate="true" Placeholder="Session name" Label="Session Name" Variant="Variant.Outlined" FullWidth="true" Class="mb-4" />
+            <MudText Typo="Typo.caption" Color="Color.Tertiary" Class="mb-4">
+                Sessions capture work across time. Name it after what you're doing (e.g., "Debug auth flow").
+            </MudText>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <MudButton OnClick="@(() => { showCreateSessionDialog = false; newSessionName = ""; })">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateSession" Disabled="@string.IsNullOrWhiteSpace(newSessionName)">
+                    Create
+                </MudButton>
+            </div>
+        </MudPaper>
+    </MudOverlay>
+}
+
+@code {
+    private List<ProjectDto> projects = new();
+    private int selectedProjectId;
+    private List<SessionDto> sessions = new();
+    private bool loadingProjects = true;
+    private bool loadingSessions = false;
+    private bool showCreateSessionDialog = false;
+    private string newSessionName = "";
+
+    private ProjectDto? SelectedProject => projects.FirstOrDefault(p => p.Id == selectedProjectId);
+
+    private int selectedProjectIdBinding
+    {
+        get => selectedProjectId;
+        set
+        {
+            if (selectedProjectId != value)
+            {
+                selectedProjectId = value;
+                _ = LoadSessions();
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProjects();
+        if (projects.Any())
+        {
+            selectedProjectId = projects.First().Id;
+            await LoadSessions();
+        }
+        loadingProjects = false;
+    }
+
+    private async Task LoadProjects()
+    {
+        try
+        {
+            projects = await Http.GetFromJsonAsync<List<ProjectDto>>("api/projects") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading projects: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadSessions()
+    {
+        if (selectedProjectId == 0) return;
+        loadingSessions = true;
+        StateHasChanged();
+        try
+        {
+            sessions = await Http.GetFromJsonAsync<List<SessionDto>>($"api/sessions?projectId={selectedProjectId}") ?? new();
+            foreach (var session in sessions)
+            {
+                var posts = await Http.GetFromJsonAsync<List<object>>($"api/posts?sessionId={session.Id}");
+                session.PostCount = posts?.Count ?? 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading sessions: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            loadingSessions = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenCreateProjectDialog()
+    {
+        var dialog = await DialogService.ShowAsync<ProjectDialog>("New Project");
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is string name)
+        {
+            try
+            {
+                var payload = new { name };
+                var response = await Http.PostAsJsonAsync("api/projects", payload);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Project '{name}' created", Severity.Success);
+                    await LoadProjects();
+                    // Select the newly created project
+                    var newProject = projects.FirstOrDefault(p => p.Name == name);
+                    if (newProject is not null)
+                    {
+                        selectedProjectId = newProject.Id;
+                        await LoadSessions();
+                    }
+                }
+                else
+                {
+                    Snackbar.Add($"Error creating project: {response.StatusCode}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenEditProjectDialog(ProjectDto project)
+    {
+        var parameters = new MudBlazor.DialogParameters();
+        parameters.Add("ProjectId", (int?)project.Id);
+        parameters.Add("InitialName", project.Name);
+
+        var dialog = await DialogService.ShowAsync<ProjectDialog>("Edit Project", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled && result.Data is string name)
+        {
+            try
+            {
+                var payload = new { name };
+                var response = await Http.PutAsJsonAsync($"api/projects/{project.Id}", payload);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Project renamed to '{name}'", Severity.Success);
+                    await LoadProjects();
+                }
+                else
+                {
+                    Snackbar.Add($"Error updating project: {response.StatusCode}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task CreateSession()
+    {
+        if (string.IsNullOrWhiteSpace(newSessionName) || SelectedProject is null)
+        {
+            Snackbar.Add("Session name is required", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            var payload = new { projectId = selectedProjectId, name = newSessionName };
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await Http.PostAsync("api/sessions", content);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Session '{newSessionName}' created", Severity.Success);
+                newSessionName = "";
+                showCreateSessionDialog = false;
+                await LoadSessions();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Error creating session: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ViewProjectIssues(int projectId)
+    {
+        Nav.NavigateTo($"/issues?projectId={projectId}");
+    }
+
+    private void ViewSessionIssues(int sessionId)
+    {
+        Nav.NavigateTo($"/issues?projectId={selectedProjectId}&sessionId={sessionId}");
+    }
+}

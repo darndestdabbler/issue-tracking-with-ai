@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build -p:CopyBuildOutputToOutputDirectory=false)",
+      "Bash(curl.exe -s \"http://localhost:5124/api/posts?status=Open&projectId=1\")",
+      "Bash(curl.exe -s \"http://localhost:5124/api/sessions?projectId=1\")",
+      "Bash(curl.exe -s \"http://localhost:5124/api/posts?projectId=1\")",
+      "Bash(dotnet run)",
+      "Bash(curl.exe -s http://localhost:5124/api/projects)",
+      "Bash(curl.exe -s \"http://localhost:5124/api/sessions?projectId=2\")",
+      "Bash(curl.exe -s \"http://localhost:5124/api/posts?projectId=1&status=Open\")",
+      "Bash(curl.exe -s http://localhost:5124/api/projects/2)",
+      "Bash(curl.exe -s -X PUT http://localhost:5124/api/projects/2 -H \"Content-Type: application/json\" -d \"{\"\"name\"\":\"\"Sample Project Renamed\"\"}\")",
+      "Bash(curl.exe -s -X PUT http://localhost:5124/api/projects/2 -H \"Content-Type: application/json\" -d \"{\"\"name\"\":\"\"Sample Project\"\"}\")",
+      "Bash(curl.exe -s \"http://localhost:5124/api/posts?status=Deferred&projectId=1\")",
+      "Bash(curl.exe -s -X POST http://localhost:5124/api/sessions -H \"Content-Type: application/json\" -d \"{\"\"projectId\"\":1, \"\"name\"\":\"\"Session 006 — Multi-Project Support\"\"}\")",
+      "Bash(curl.exe -s -X POST http://localhost:5124/api/sessions -H \"Content-Type: application/json\" -d \"{\"\"projectId\"\":1, \"\"name\"\":\"\"Session 006 - Multi-Project Support\"\"}\")",
+      "Bash(curl.exe -s -X POST http://localhost:5124/api/posts -H \"Content-Type: application/json\" -d \"{\"\"sessionId\"\":5, \"\"fromActorId\"\":1, \"\"actionType\"\":\"\"Archive\"\", \"\"actionForId\"\":12, \"\"text\"\":\"\"Resolved in Session 006. Named HttpClient registered in Program.cs with BaseAddress from appsettings.json ApiBaseUrl. All hardcoded URLs stripped from Issues.razor and Sessions.razor.\"\"}\")",
+      "Bash(curl.exe -s -X POST http://localhost:5124/api/posts -H \"Content-Type: application/json\" -d \"{\"\"sessionId\"\":5, \"\"fromActorId\"\":1, \"\"actionType\"\":\"\"Archive\"\", \"\"actionForId\"\":14, \"\"text\"\":\"\"Resolved in Session 006. Demo data seeder updated with two projects and realistic thread data. Multi-project support now functional.\"\"}\")",
+      "Bash(dotnet list IssueTracker.Web/IssueTracker.Web.csproj package)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}

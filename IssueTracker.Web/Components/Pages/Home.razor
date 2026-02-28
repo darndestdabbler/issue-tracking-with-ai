@@ -1,0 +1,26 @@
+@page "/"
+
+<PageTitle>Issue Tracker</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Issue Tracker</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">
+    Cross-session issue and discussion tracker for Claude Code workflows.
+</MudText>
+
+<MudAlert Severity="Severity.Info" Class="mb-4">
+    The API is running. Use the endpoints below from Claude Code to log issues and retrieve context.
+</MudAlert>
+
+<MudSimpleTable Hover="true" Dense="true" Style="max-width: 600px;">
+    <thead>
+        <tr><th>Endpoint</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><code>GET /api/projects</code></td><td>List projects</td></tr>
+        <tr><td><code>GET /api/actors</code></td><td>List actors (Claude=1, Human=2)</td></tr>
+        <tr><td><code>POST /api/sessions</code></td><td>Start a new session</td></tr>
+        <tr><td><code>POST /api/posts</code></td><td>Log an issue or discussion</td></tr>
+        <tr><td><code>GET /api/posts?status=Open&amp;projectId=1</code></td><td>Open issues</td></tr>
+        <tr><td><code>GET /api/posts/{id}/thread</code></td><td>Full thread</td></tr>
+    </tbody>
+</MudSimpleTable>

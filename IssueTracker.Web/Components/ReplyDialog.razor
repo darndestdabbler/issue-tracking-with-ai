@@ -1,0 +1,123 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@isFormValid">
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="reply.ActionType"
+                               Label="Action"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               RequiredError="Action Type is required">
+                        <MudSelectItem Value="@("Discuss")">Discuss</MudSelectItem>
+                        <MudSelectItem Value="@("Proceed As Is")">Proceed As Is</MudSelectItem>
+                        <MudSelectItem Value="@("Proceed With Mods")">Proceed With Mods</MudSelectItem>
+                        <MudSelectItem Value="@("Check")">Check (Request Review)</MudSelectItem>
+                        <MudSelectItem Value="@("Hold")">Hold (Defer Issue)</MudSelectItem>
+                        <MudSelectItem Value="@("Archive")">Archive (Close Issue)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="6">
+                    <MudSelect @bind-Value="reply.FromActorId"
+                               Label="From"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               RequiredError="From is required">
+                        @foreach (var actor in Actors)
+                        {
+                            <MudSelectItem Value="@actor.Id">@actor.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="6">
+                    <MudSelect @bind-Value="reply.SessionId"
+                               Label="Session"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               RequiredError="Session is required">
+                        @foreach (var session in Sessions)
+                        {
+                            <MudSelectItem Value="@session.Id">@session.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="reply.Text"
+                                  Label="Reply"
+                                  Variant="Variant.Outlined"
+                                  FullWidth="true"
+                                  Lines="4"
+                                  Required="true"
+                                  RequiredError="Reply text is required"
+                                  Placeholder="Add your comment, decision, or status update" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudSelect @bind-Value="reply.ToActorId"
+                               Label="Assign to (optional)"
+                               Variant="Variant.Outlined"
+                               Clearable="true">
+                        @foreach (var actor in Actors)
+                        {
+                            <MudSelectItem Value="@((int?)actor.Id)">@actor.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(!isFormValid)">
+            Submit Reply
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialogInstance { get; set; } = null!;
+
+    [Parameter] public List<SessionDto> Sessions { get; set; } = new();
+    [Parameter] public List<ActorDto> Actors { get; set; } = new();
+    [Parameter] public int RootPostId { get; set; }
+    [Parameter] public int? FilterSessionId { get; set; }
+
+    private ReplyRequest reply = new();
+    private MudForm? form;
+    private bool isFormValid = true;
+
+    protected override void OnInitialized()
+    {
+        reply.ActionForId = RootPostId;
+        reply.FromActorId = 2; // Default to Dennis for UI replies
+
+        if (FilterSessionId.HasValue)
+            reply.SessionId = FilterSessionId.Value;
+        else if (Sessions.Any())
+            reply.SessionId = Sessions.Last().Id; // Most recent session
+    }
+
+    private async Task Submit()
+    {
+        if (form != null)
+        {
+            await form.Validate();
+            if (form.IsValid)
+            {
+                MudDialogInstance.Close(DialogResult.Ok(reply));
+            }
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialogInstance.Cancel();
+    }
+}
