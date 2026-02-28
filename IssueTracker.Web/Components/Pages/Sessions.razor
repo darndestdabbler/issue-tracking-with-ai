@@ -111,6 +111,10 @@
                                     OnClick="@(() => ViewSessionIssues(context.Item.Id))">
                                     View Issues
                                 </MudButton>
+                                <MudTooltip Text="Archive Session">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Archive" Size="Size.Small"
+                                                   OnClick="@(() => ArchiveSession(context.Item))" />
+                                </MudTooltip>
                             </CellTemplate>
                         </TemplateColumn>
                     </Columns>
@@ -321,5 +325,33 @@
     private void ViewSessionIssues(int sessionId)
     {
         Nav.NavigateTo($"/issues?projectId={selectedProjectId}&sessionId={sessionId}");
+    }
+
+    private async Task ArchiveSession(SessionDto session)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Archive Session",
+            $"Archive \"{session.Name}\"? It will be hidden but not deleted.",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        try
+        {
+            var response = await Http.PutAsync($"api/sessions/{session.Id}/archive", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Session '{session.Name}' archived", Severity.Success);
+                await LoadSessions();
+            }
+            else
+            {
+                Snackbar.Add($"Error archiving session: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
     }
 }

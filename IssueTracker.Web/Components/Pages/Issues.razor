@@ -58,7 +58,7 @@
         <MudText>No issues found.</MudText>
     </NoRecordsContent>
     <Columns>
-        <TemplateColumn Title="Title" SortLabel="title">
+        <PropertyColumn Property="x => x.Title" Title="Title">
             <CellTemplate>
                 <MudText>@context.Item.Title</MudText>
                 @if (!string.IsNullOrWhiteSpace(context.Item.Tags))
@@ -71,15 +71,11 @@
                     </div>
                 }
             </CellTemplate>
-        </TemplateColumn>
-        <PropertyColumn Property="x => x.Status" Title="Status" SortLabel="status" />
-        <PropertyColumn Property="x => x.ActionType" Title="Action" SortLabel="actiontype" />
-        <PropertyColumn Property="x => x.FromActor" Title="From" SortLabel="fromactor" />
-        <TemplateColumn Title="Date" SortLabel="datetime">
-            <CellTemplate>
-                <MudText>@context.Item.DateTime.ToString("yyyy-MM-dd HH:mm")</MudText>
-            </CellTemplate>
-        </TemplateColumn>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Status" Title="Status" />
+        <PropertyColumn Property="x => x.ActionType" Title="Action" />
+        <PropertyColumn Property="x => x.FromActor" Title="From" />
+        <PropertyColumn Property="x => x.DateTime" Title="Date" Format="yyyy-MM-dd HH:mm" />
         <TemplateColumn Title="Actions" Sortable="false">
             <CellTemplate>
                 @if (context.Item.Status == "Open")

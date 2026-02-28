@@ -7,6 +7,7 @@ public class Session
     public string Name { get; set; } = "";
     public DateTime StartDate { get; set; } = DateTime.UtcNow;
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
+    public bool IsArchived { get; set; }
 
     public Project Project { get; set; } = null!;
 }

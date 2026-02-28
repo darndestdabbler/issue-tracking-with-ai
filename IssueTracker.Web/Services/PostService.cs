@@ -98,13 +98,14 @@ public class PostService(AppDbContext db)
 
         var totalCount = await query.CountAsync();
 
-        query = sortBy?.ToLowerInvariant() switch
+        query = sortBy switch
         {
-            "title"      => sortDescending ? query.OrderByDescending(p => p.Title) : query.OrderBy(p => p.Title),
-            "status"     => sortDescending ? query.OrderByDescending(p => p.Status) : query.OrderBy(p => p.Status),
-            "actiontype" => sortDescending ? query.OrderByDescending(p => p.ActionType) : query.OrderBy(p => p.ActionType),
-            "fromactor"  => sortDescending ? query.OrderByDescending(p => p.FromActor!.Name) : query.OrderBy(p => p.FromActor!.Name),
-            _            => sortDescending ? query.OrderBy(p => p.DateTime) : query.OrderByDescending(p => p.DateTime),
+            "Title"      => sortDescending ? query.OrderByDescending(p => p.Title) : query.OrderBy(p => p.Title),
+            "Status"     => sortDescending ? query.OrderByDescending(p => p.Status) : query.OrderBy(p => p.Status),
+            "ActionType" => sortDescending ? query.OrderByDescending(p => p.ActionType) : query.OrderBy(p => p.ActionType),
+            "FromActor"  => sortDescending ? query.OrderByDescending(p => p.FromActor!.Name) : query.OrderBy(p => p.FromActor!.Name),
+            "DateTime"   => sortDescending ? query.OrderByDescending(p => p.DateTime) : query.OrderBy(p => p.DateTime),
+            _            => query.OrderByDescending(p => p.DateTime),
         };
 
         var items = await query
