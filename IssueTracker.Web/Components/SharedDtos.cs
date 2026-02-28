@@ -15,6 +15,7 @@ public class SessionDto
     public DateTime StartDate { get; set; }
     public DateTime CreatedOn { get; set; }
     public int PostCount { get; set; }
+    public bool IsArchived { get; set; }
 }
 
 public class ActorDto

@@ -48,6 +48,17 @@ public class SessionsController(AppDbContext db) : ControllerBase
             new { session.Id, session.Name, session.ProjectId, session.StartDate });
     }
 
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateSessionRequest request)
+    {
+        var session = await db.Sessions.Include(s => s.Project).FirstOrDefaultAsync(s => s.Id == id);
+        if (session is null) return NotFound();
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            session.Name = request.Name;
+        await db.SaveChangesAsync();
+        return Ok(new { session.Id, session.Name, session.ProjectId, projectName = session.Project.Name, session.StartDate, session.CreatedOn, session.IsArchived });
+    }
+
     [HttpPut("{id:int}/archive")]
     public async Task<IActionResult> Archive(int id)
     {
@@ -71,6 +82,11 @@ public class SessionsController(AppDbContext db) : ControllerBase
     public class CreateSessionRequest
     {
         public int ProjectId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    public class UpdateSessionRequest
+    {
         public string Name { get; set; } = "";
     }
 }

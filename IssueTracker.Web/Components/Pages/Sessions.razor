@@ -71,11 +71,17 @@
                 <MudText Typo="Typo.h6">
                     Sessions — @(SelectedProject?.Name ?? "Select a project")
                 </MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                           OnClick="@(() => showCreateSessionDialog = true)"
-                           Disabled="@(SelectedProject is null)">
-                    <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" />New Session
-                </MudButton>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    @if (SelectedProject is not null)
+                    {
+                        <MudSwitch T="bool" Value="@_showArchived" ValueChanged="@OnShowArchivedChanged" Color="Color.Secondary" Label="Show Archived" />
+                    }
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="@(() => showCreateSessionDialog = true)"
+                               Disabled="@(SelectedProject is null)">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" />New Session
+                    </MudButton>
+                </div>
             </div>
 
             @if (SelectedProject is null)
@@ -98,7 +104,21 @@
             {
                 <MudDataGrid Items="@sessions" Hover="true" Bordered="true" Dense="true">
                     <Columns>
-                        <PropertyColumn Property="x => x.Name" Title="Name" />
+                        <TemplateColumn Title="Name">
+                            <CellTemplate>
+                                @if (context.Item.IsArchived)
+                                {
+                                    <MudText Color="Color.Tertiary" Style="font-style: italic;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Archive" Size="Size.Small" Class="mr-1" />
+                                        @context.Item.Name
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudText>@context.Item.Name</MudText>
+                                }
+                            </CellTemplate>
+                        </TemplateColumn>
                         <TemplateColumn Title="Started">
                             <CellTemplate>
                                 <MudText>@context.Item.StartDate.ToString("yyyy-MM-dd HH:mm")</MudText>
@@ -111,10 +131,27 @@
                                     OnClick="@(() => ViewSessionIssues(context.Item.Id))">
                                     View Issues
                                 </MudButton>
-                                <MudTooltip Text="Archive Session">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Archive" Size="Size.Small"
-                                                   OnClick="@(() => ArchiveSession(context.Item))" />
-                                </MudTooltip>
+                                <span @onclick:stopPropagation="true">
+                                    <MudTooltip Text="Rename Session">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                       OnClick="@(() => OpenRenameSession(context.Item))" />
+                                    </MudTooltip>
+                                    @if (context.Item.IsArchived)
+                                    {
+                                        <MudTooltip Text="Restore Session">
+                                            <MudIconButton Icon="@Icons.Material.Filled.RestoreFromTrash" Size="Size.Small"
+                                                           Color="Color.Success"
+                                                           OnClick="@(() => RestoreSession(context.Item))" />
+                                        </MudTooltip>
+                                    }
+                                    else
+                                    {
+                                        <MudTooltip Text="Archive Session">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Archive" Size="Size.Small"
+                                                           OnClick="@(() => ArchiveSession(context.Item))" />
+                                        </MudTooltip>
+                                    }
+                                </span>
                             </CellTemplate>
                         </TemplateColumn>
                     </Columns>
@@ -144,6 +181,22 @@
     </MudOverlay>
 }
 
+@if (showRenameSessionDialog)
+{
+    <MudOverlay Visible="true" DarkBackground="true" OnClick="@(() => { showRenameSessionDialog = false; renameSessionName = ""; renamingSession = null; })">
+        <MudPaper Class="pa-8" Style="max-width: 400px;" @onclick:stopPropagation="true">
+            <MudText Typo="Typo.h6" Class="mb-4">Rename Session</MudText>
+            <MudTextField @bind-Value="renameSessionName" Immediate="true" Placeholder="Session name" Label="Session Name" Variant="Variant.Outlined" FullWidth="true" Class="mb-4" />
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <MudButton OnClick="@(() => { showRenameSessionDialog = false; renameSessionName = ""; renamingSession = null; })">Cancel</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="RenameSession" Disabled="@string.IsNullOrWhiteSpace(renameSessionName)">
+                    Save
+                </MudButton>
+            </div>
+        </MudPaper>
+    </MudOverlay>
+}
+
 @code {
     private List<ProjectDto> projects = new();
     private int selectedProjectId;
@@ -152,6 +205,17 @@
     private bool loadingSessions = false;
     private bool showCreateSessionDialog = false;
     private string newSessionName = "";
+    private bool showRenameSessionDialog = false;
+    private SessionDto? renamingSession;
+    private string renameSessionName = "";
+
+    private bool _showArchived;
+
+    private async Task OnShowArchivedChanged(bool value)
+    {
+        _showArchived = value;
+        await LoadSessions();
+    }
 
     private ProjectDto? SelectedProject => projects.FirstOrDefault(p => p.Id == selectedProjectId);
 
@@ -198,7 +262,10 @@
         StateHasChanged();
         try
         {
-            sessions = await Http.GetFromJsonAsync<List<SessionDto>>($"api/sessions?projectId={selectedProjectId}") ?? new();
+            var url = $"api/sessions?projectId={selectedProjectId}";
+            if (_showArchived)
+                url += "&includeArchived=true";
+            sessions = await Http.GetFromJsonAsync<List<SessionDto>>(url) ?? new();
         }
         catch (Exception ex)
         {
@@ -342,6 +409,62 @@
             else
             {
                 Snackbar.Add($"Error archiving session: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OpenRenameSession(SessionDto session)
+    {
+        renamingSession = session;
+        renameSessionName = session.Name;
+        showRenameSessionDialog = true;
+    }
+
+    private async Task RenameSession()
+    {
+        if (string.IsNullOrWhiteSpace(renameSessionName) || renamingSession is null)
+            return;
+
+        try
+        {
+            var payload = new { name = renameSessionName };
+            var response = await Http.PutAsJsonAsync($"api/sessions/{renamingSession.Id}", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Session renamed to '{renameSessionName}'", Severity.Success);
+                showRenameSessionDialog = false;
+                renameSessionName = "";
+                renamingSession = null;
+                await LoadSessions();
+            }
+            else
+            {
+                Snackbar.Add($"Error renaming session: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RestoreSession(SessionDto session)
+    {
+        try
+        {
+            var response = await Http.PutAsync($"api/sessions/{session.Id}/restore", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Session '{session.Name}' restored", Severity.Success);
+                await LoadSessions();
+            }
+            else
+            {
+                Snackbar.Add($"Error restoring session: {response.StatusCode}", Severity.Error);
             }
         }
         catch (Exception ex)

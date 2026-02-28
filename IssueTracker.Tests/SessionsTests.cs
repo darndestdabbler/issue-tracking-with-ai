@@ -93,6 +93,34 @@ public class SessionsTests : IClassFixture<IssueTrackerFactory>
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Rename_ChangesName()
+    {
+        var createResponse = await _client.PostAsJsonAsync("/api/sessions",
+            new { projectId = 1, name = "Before Rename" });
+        var created = await createResponse.Content.ReadFromJsonAsync<SessionDto>(JsonOptions);
+
+        var response = await _client.PutAsJsonAsync($"/api/sessions/{created!.Id}",
+            new { name = "After Rename" });
+        Assert.True(response.IsSuccessStatusCode);
+
+        var updated = await response.Content.ReadFromJsonAsync<SessionDto>(JsonOptions);
+        Assert.NotNull(updated);
+        Assert.Equal("After Rename", updated.Name);
+
+        // Verify via GET
+        var fetched = await _client.GetFromJsonAsync<SessionDto>($"/api/sessions/{created.Id}", JsonOptions);
+        Assert.Equal("After Rename", fetched!.Name);
+    }
+
+    [Fact]
+    public async Task Rename_NotFound_Returns404()
+    {
+        var response = await _client.PutAsJsonAsync("/api/sessions/999",
+            new { name = "Doesn't Matter" });
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private record SessionDto(
         int Id, string Name, int ProjectId, string? ProjectName,
         DateTime StartDate, DateTime CreatedOn, bool IsArchived, int PostCount);
