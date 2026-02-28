@@ -3,8 +3,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IssueTracker.Web.Data;
 
+/// <summary>Seeds the database with actors, projects, and demo data on first run.</summary>
 public static class DatabaseSeeder
 {
+    /// <summary>
+    /// Applies migrations (or EnsureCreated for in-memory SQLite), then seeds
+    /// actors, projects, and demo sessions/posts if the tables are empty.
+    /// </summary>
+    /// <param name="app">The running web application.</param>
     public static async Task SeedAsync(WebApplication app)
     {
         using var scope = app.Services.CreateScope();
@@ -45,6 +51,7 @@ public static class DatabaseSeeder
         }
     }
 
+    /// <summary>Creates sample sessions and multi-threaded posts showing the full issue lifecycle.</summary>
     private static async Task SeedDemoDataAsync(AppDbContext db)
     {
         var baseDate = new DateTime(2026, 2, 25, 10, 0, 0, DateTimeKind.Utc);

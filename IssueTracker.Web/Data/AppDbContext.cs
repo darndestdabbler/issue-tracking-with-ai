@@ -3,13 +3,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IssueTracker.Web.Data;
 
+/// <summary>EF Core database context for the issue tracker.</summary>
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    /// <summary>Projects table.</summary>
     public DbSet<Models.Project> Projects => Set<Models.Project>();
+
+    /// <summary>Sessions table.</summary>
     public DbSet<Session> Sessions => Set<Session>();
+
+    /// <summary>Actors table.</summary>
     public DbSet<Actor> Actors => Set<Actor>();
+
+    /// <summary>Posts table.</summary>
     public DbSet<Post> Posts => Set<Post>();
 
+    /// <summary>Configures self-referencing Post relationships and restricts cascade deletes on Actor FKs.</summary>
     protected override void OnModelCreating(ModelBuilder mb)
     {
         // Self-referencing: Post → Parent (via ActionForId)

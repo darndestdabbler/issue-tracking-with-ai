@@ -4,8 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IssueTracker.Web.Services;
 
+/// <summary>Business logic for creating, querying, and updating posts (issues and replies).</summary>
 public class PostService(AppDbContext db)
 {
+    /// <summary>
+    /// Creates a post, deriving ProjectId from its session and propagating status
+    /// changes (Hold→Deferred, Archive→Closed, Reopen→Open) to the root post.
+    /// </summary>
+    /// <param name="post">The post to create. SessionId must reference an existing session.</param>
+    /// <returns>The created post with its generated Id.</returns>
+    /// <exception cref="ArgumentException">Thrown when the referenced session does not exist.</exception>
     public async Task<Post> CreatePostAsync(Post post)
     {
         // Derive ProjectId from Session
@@ -39,6 +47,12 @@ public class PostService(AppDbContext db)
         return post;
     }
 
+    /// <summary>Returns root posts matching the given filters, ordered by date descending.</summary>
+    /// <param name="sessionId">Optional session filter.</param>
+    /// <param name="projectId">Optional project filter.</param>
+    /// <param name="status">Optional status filter (Open, Closed, Deferred).</param>
+    /// <param name="tags">Optional comma-delimited tags; all must match (AND logic).</param>
+    /// <returns>Filtered list of root posts with FromActor and ToActor included.</returns>
     public async Task<List<Post>> GetPostsAsync(int? sessionId, int? projectId, string? status, string? tags)
     {
         var query = db.Posts
@@ -70,6 +84,16 @@ public class PostService(AppDbContext db)
         return await query.OrderByDescending(p => p.DateTime).ToListAsync();
     }
 
+    /// <summary>Returns a page of root posts with total count for server-side paging.</summary>
+    /// <param name="sessionId">Optional session filter.</param>
+    /// <param name="projectId">Optional project filter.</param>
+    /// <param name="status">Optional status filter.</param>
+    /// <param name="tags">Optional comma-delimited tags (AND logic).</param>
+    /// <param name="sortBy">Column name to sort by (Title, Status, ActionType, FromActor, DateTime).</param>
+    /// <param name="sortDescending">True for descending sort order.</param>
+    /// <param name="page">Zero-based page index.</param>
+    /// <param name="pageSize">Number of items per page.</param>
+    /// <returns>A tuple of the page items and the total matching count.</returns>
     public async Task<(List<Post> Items, int TotalCount)> GetPostsPagedAsync(
         int? sessionId, int? projectId, string? status, string? tags,
         string? sortBy, bool sortDescending, int page, int pageSize)
@@ -120,12 +144,21 @@ public class PostService(AppDbContext db)
         return (items, totalCount);
     }
 
+    /// <summary>Returns a single post by ID with actor navigation properties, or null if not found.</summary>
+    /// <param name="id">The post ID.</param>
+    /// <returns>The post, or null.</returns>
     public async Task<Post?> GetPostAsync(int id)
         => await db.Posts
             .Include(p => p.FromActor)
             .Include(p => p.ToActor)
             .FirstOrDefaultAsync(p => p.Id == id);
 
+    /// <summary>
+    /// Returns the full thread (root + all descendants) using a recursive CTE.
+    /// Compatible with both SQLite and SQL Server.
+    /// </summary>
+    /// <param name="rootId">The root post ID.</param>
+    /// <returns>All posts in the thread, ordered by date ascending.</returns>
     public async Task<List<Post>> GetThreadAsync(int rootId)
     {
         // Recursive CTE fetches the entire thread tree in a single query.
@@ -153,6 +186,12 @@ public class PostService(AppDbContext db)
             .ToListAsync();
     }
 
+    /// <summary>Updates the title, tags, and/or text of a root post. Non-root posts cannot be edited.</summary>
+    /// <param name="id">The post ID.</param>
+    /// <param name="title">New title, or null to leave unchanged.</param>
+    /// <param name="tags">New tags, or null to leave unchanged.</param>
+    /// <param name="text">New text, or null to leave unchanged.</param>
+    /// <returns>The updated post, or null if not found or not a root post.</returns>
     public async Task<Post?> UpdatePostAsync(int id, string? title, string? tags, string? text)
     {
         var post = await db.Posts.FindAsync(id);
@@ -167,6 +206,7 @@ public class PostService(AppDbContext db)
         return post;
     }
 
+    /// <summary>Walks up the ActionForId chain to find the root post of a thread.</summary>
     private async Task<Post?> FindRootAsync(int postId)
     {
         var post = await db.Posts.FindAsync(postId);
