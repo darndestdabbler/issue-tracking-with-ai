@@ -2,25 +2,107 @@
 
 <PageTitle>Issue Tracker</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Issue Tracker</MudText>
-<MudText Typo="Typo.body1" Class="mb-4">
-    Cross-session issue and discussion tracker for Claude Code workflows.
-</MudText>
+<div class="d-flex justify-center mb-6">
+    <MudImage Src="img/AI-Integrated-Issue-Tracker-Splash.svg"
+              Alt="AI-Integrated Issue Tracker"
+              Style="max-width: 900px; width: 100%;" />
+</div>
 
-<MudAlert Severity="Severity.Info" Class="mb-4">
-    The API is running. Use the endpoints below from Claude Code to log issues and retrieve context.
-</MudAlert>
+<div style="max-width: 900px; margin: 0 auto;">
+    <MudText Typo="Typo.h6" Align="Align.Center" Class="mb-6" Style="color: var(--mud-palette-text-secondary);">
+        A cross-session issue tracker that gives AI coding assistants structured memory
+         <br/>&mdash; and gives you visibility into what they decided.
+    </MudText>
 
-<MudSimpleTable Hover="true" Dense="true" Style="max-width: 600px;">
-    <thead>
-        <tr><th>Endpoint</th><th>Purpose</th></tr>
-    </thead>
-    <tbody>
-        <tr><td><code>GET /api/projects</code></td><td>List projects</td></tr>
-        <tr><td><code>GET /api/actors</code></td><td>List actors (Claude=1, Human=2)</td></tr>
-        <tr><td><code>POST /api/sessions</code></td><td>Start a new session</td></tr>
-        <tr><td><code>POST /api/posts</code></td><td>Log an issue or discussion</td></tr>
-        <tr><td><code>GET /api/posts?status=Open&amp;projectId=1</code></td><td>Open issues</td></tr>
-        <tr><td><code>GET /api/posts/{id}/thread</code></td><td>Full thread</td></tr>
-    </tbody>
-</MudSimpleTable>
+    <MudPaper Class="pa-6 mb-6" Elevation="0" Style="background: transparent;">
+        <MudText Typo="Typo.body1" Class="mb-3">
+            AI coding assistants start every session with amnesia. They have no memory of what was decided
+            yesterday, what was deferred last week, or which issues are still open. Every session begins from scratch.
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mb-3">
+            <strong>BATONs</strong> help &mdash; session handoff documents that carry the narrative from one session
+            to the next. But BATONs are linear. Twelve sessions in, when you need to know
+            <em>&ldquo;what issues are still open across all sessions?&rdquo;</em> you need something queryable.
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mb-3">
+            This project fills that gap. Claude Code logs decisions, blockers, and resolutions via a REST API.
+            You review, filter, and manage them through this web UI. Together, BATONs and the tracker form
+            a complete handoff system for multi-session AI development.
+        </MudText>
+        <MudText Typo="Typo.body1" Align="Align.Center">
+            <em>&ldquo;The BATON carries the story. The tracker carries the ledger.&rdquo;</em>
+        </MudText>
+    </MudPaper>
+
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2" Style="height: 100%; cursor: pointer;" @onclick="@(() => NavigateToIssues())">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.BugReport" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6">Issues</MudText>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body2">
+                        Browse, filter, and manage issues across projects and sessions. View discussion threads,
+                        change status, and track decisions.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2" Style="height: 100%; cursor: pointer;" @onclick="@(() => NavigateToSessions())">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.AccountTree" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6">Projects & Sessions</MudText>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body2">
+                        Organize work into projects and track sessions. Create, rename, and archive sessions
+                        as your project evolves.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2" Style="height: 100%; cursor: pointer;" @onclick="@(() => NavigateToSwagger())">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Api" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6">Swagger API</MudText>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body2">
+                        Explore the REST API interactively. View endpoint documentation, try out calls,
+                        and inspect request and response shapes.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+        For setup instructions, session workflow, API reference, and more &mdash;
+        see <strong>README.md</strong> in the repository root.
+    </MudAlert>
+</div>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private void NavigateToIssues() => Navigation.NavigateTo("/issues");
+    private void NavigateToSessions() => Navigation.NavigateTo("/sessions");
+    private void NavigateToSwagger() => Navigation.NavigateTo("/swagger", forceLoad: true);
+}
