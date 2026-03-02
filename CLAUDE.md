@@ -1,3 +1,14 @@
+# Project Constants
+Whenever these names appear in this document or in my prompts, 
+use the values defined here.  If a command that includes the
+constant fails to work, prompt the user to see if the 
+constant should be updated.
+
+
+- {{ISSUE_TRACKER_API_URL}}: http://localhost:5124/api
+
+
+
 # Issue Tracker — Claude Code Instructions
 
 This project includes a REST API for cross-session issue tracking. Use it to persist decisions, blockers, and action items across sessions.
@@ -24,12 +35,12 @@ This project includes a REST API for cross-session issue tracking. Use it to per
 
 ```bash
 # 1. Create session (replace "Session Name" with a meaningful name)
-curl.exe -s -X POST http://localhost:5124/api/sessions ^
+curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/sessions ^
   -H "Content-Type: application/json" ^
   -d "{\"projectId\":1, \"name\":\"Session 002 — Scaffold\"}"
 
 # 2. Get open issues
-curl.exe -s "http://localhost:5124/api/posts?status=Open&projectId=1"
+curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?status=Open&projectId=1"
 ```
 
 ---
@@ -51,12 +62,10 @@ Log a post when something needs to survive beyond this session:
 
 ## API Reference
 
-**Base URL:** `http://localhost:5124`
-
 ### Create a new issue (root post)
 
 ```bash
-curl.exe -s -X POST http://localhost:5124/api/posts ^
+curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
   -H "Content-Type: application/json" ^
   -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"New\", \"title\":\"Token refresh broken\", \"tags\":\"auth,token\", \"text\":\"Null ref when token is expired at middleware layer.\"}"
 ```
@@ -64,7 +73,7 @@ curl.exe -s -X POST http://localhost:5124/api/posts ^
 ### Add discussion to an existing post
 
 ```bash
-curl.exe -s -X POST http://localhost:5124/api/posts ^
+curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
   -H "Content-Type: application/json" ^
   -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"Discuss\", \"actionForId\":12, \"text\":\"Root cause found in TokenRefreshMiddleware line 47.\"}"
 ```
@@ -72,7 +81,7 @@ curl.exe -s -X POST http://localhost:5124/api/posts ^
 ### Archive (close) an issue
 
 ```bash
-curl.exe -s -X POST http://localhost:5124/api/posts ^
+curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
   -H "Content-Type: application/json" ^
   -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"Archive\", \"actionForId\":12, \"text\":\"Fixed in commit abc123. Token refresh now handles null expiry.\"}"
 ```
@@ -80,7 +89,7 @@ curl.exe -s -X POST http://localhost:5124/api/posts ^
 ### Hold (defer) an issue
 
 ```bash
-curl.exe -s -X POST http://localhost:5124/api/posts ^
+curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
   -H "Content-Type: application/json" ^
   -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"Hold\", \"actionForId\":12, \"text\":\"Waiting on auth library update from upstream.\"}"
 ```
@@ -88,25 +97,25 @@ curl.exe -s -X POST http://localhost:5124/api/posts ^
 ### Get open issues
 
 ```bash
-curl.exe -s "http://localhost:5124/api/posts?status=Open&projectId=1"
+curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?status=Open&projectId=1"
 ```
 
 ### Get all posts for this session
 
 ```bash
-curl.exe -s "http://localhost:5124/api/posts?sessionId=1"
+curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?sessionId=1"
 ```
 
 ### Get full thread for a post
 
 ```bash
-curl.exe -s http://localhost:5124/api/posts/12/thread
+curl.exe -s {{ISSUE_TRACKER_API_URL}}/posts/12/thread
 ```
 
 ### Filter by tags
 
 ```bash
-curl.exe -s "http://localhost:5124/api/posts?tags=auth&status=Open&projectId=1"
+curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?tags=auth&status=Open&projectId=1"
 ```
 
 ---
@@ -131,6 +140,6 @@ curl.exe -s "http://localhost:5124/api/posts?tags=auth&status=Open&projectId=1"
 Review posts created this session, then write a BATON to `docs/BATON-Session-NNN-*.md` covering:
 - Session narrative and approach taken
 - High-level context for next session
-- Link to open issues in the tracker (retrieve via `GET /api/posts?status=Open&projectId=1`)
+- Link to open issues in the tracker (retrieve via `GET {{ISSUE_TRACKER_API_URL}}/posts?status=Open&projectId=1`)
 
 The BATON carries the story. The tracker carries the ledger.
