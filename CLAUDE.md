@@ -7,16 +7,15 @@ prompt the user to see if the constant should be updated.
 - {{PROJECT_NAME}}: Issue Tracker
 - {{PROJECT_ID}}: 1
 - {{ISSUE_TRACKER_API_URL}}: http://localhost:5124/api
-- {{ISSUE_TRACKER_PATH}}: c:\Users\denmi\source\repos\issue-tracking-with-ai
 
 # Cross-Session Workflow
 
 At the start of every session, read and follow the instructions in these files
 (in this order):
 
-1. `docs/claude-instructions/baton.md` — Read the latest BATON first to understand context
-2. `docs/claude-instructions/issue-tracking.md` — Create session, retrieve open issues
-3. `docs/claude-instructions/git.md` — Verify git is initialized and .gitignore is up to date
+1. @docs/claude-instructions/baton.md — Read the latest BATON first to understand context
+2. @docs/claude-instructions/issue-tracking.md — Create session, retrieve open issues
+3. @docs/claude-instructions/git.md — Verify git is initialized and .gitignore is up to date
 
 At the end of every session, follow the session-end instructions in `baton.md` and `issue-tracking.md`.
 

@@ -117,7 +117,7 @@ Claude Code reads `CLAUDE.md` from your project root at the start of every sessi
 | `git.md` | Git workflow — initialization, .gitignore management, commit and push behavior |
 | `TEMPLATE-CLAUDE.md` | Starter `CLAUDE.md` to copy into any project |
 
-Each project's `CLAUDE.md` defines a `{{ISSUE_TRACKER_PATH}}` constant pointing to this repo's checkout path, then references these files. See [Using the Tracker with Another Project](#using-the-tracker-with-another-project) for setup details.
+Each project copies these files into its own `docs/claude-instructions/` folder and renames `TEMPLATE-CLAUDE.md` to `CLAUDE.md` in the project root. See [Using the Tracker with Another Project](#using-the-tracker-with-another-project) for setup details.
 
 > **Windows note:** Use `curl.exe`, not `curl`. In PowerShell, `curl` is an alias for `Invoke-WebRequest`.
 
@@ -210,12 +210,12 @@ Open the Issue Tracker in a **separate VS Code window** from your main project. 
 
 ### Connecting your other project
 
-1. Copy `docs/claude-instructions/TEMPLATE-CLAUDE.md` from this repo into your other project's root as `CLAUDE.md`.
-2. Fill in the constants:
+1. Copy the `docs/claude-instructions/` folder from this repo into your other project's `docs/` folder.
+2. Rename `docs/claude-instructions/TEMPLATE-CLAUDE.md` to `CLAUDE.md` and place it in your project root.
+3. Fill in the constants:
    - `{{PROJECT_NAME}}` — your project's name (defaults to folder name)
-   - `{{ISSUE_TRACKER_PATH}}` — absolute path to this repo's checkout (e.g., `c:\Users\you\source\repos\issue-tracking-with-ai`)
    - `{{ISSUE_TRACKER_API_URL}}` — the tracker API URL (default: `http://localhost:5124/api`)
-3. Leave `{{PROJECT_ID}}` as the placeholder. On the first session, Claude will detect it's unset, prompt you to register the project, and update the constant automatically.
+4. Leave `{{PROJECT_ID}}` as the placeholder. On the first session, Claude will detect it's unset, prompt you to register the project, and update the constant automatically.
 
 Claude Code will then read the referenced instruction files at session start and interact with the tracker — creating sessions, logging issues, and writing BATONs.
 
