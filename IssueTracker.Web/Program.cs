@@ -35,8 +35,12 @@ if (dbProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
 }
 else
 {
+    var dbPath = Environment.GetEnvironmentVariable("ISSUETRACKER_DB_PATH");
+    var connectionString = dbPath != null
+        ? $"Data Source={dbPath}"
+        : builder.Configuration.GetConnectionString("SQLite");
     builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseSqlite(builder.Configuration.GetConnectionString("SQLite")));
+        options.UseSqlite(connectionString));
 }
 
 var app = builder.Build();

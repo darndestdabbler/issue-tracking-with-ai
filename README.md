@@ -108,9 +108,16 @@ Preserve code changes, the BATON document, and any tracker database changes.
 
 ## How Claude Code Uses the API
 
-Claude Code reads `CLAUDE.md` from your project root at the start of every session. This file contains the API instructions, endpoint reference, and conventions that tell Claude how to interact with the tracker.
+Claude Code reads `CLAUDE.md` from your project root at the start of every session. This project provides modular instruction files in `docs/claude-instructions/` that any project's `CLAUDE.md` can reference:
 
-The `CLAUDE.md` in this repository is the reference implementation. When using the tracker for a different project, you copy these instructions into that project's `CLAUDE.md` and update the project ID.
+| File | Purpose |
+|---|---|
+| `issue-tracking.md` | Issue tracking workflow, first-session project registration, full API reference |
+| `baton.md` | Session handoff (BATON) workflow — when to read, when to write, naming conventions |
+| `git.md` | Git workflow — initialization, .gitignore management, commit and push behavior |
+| `TEMPLATE-CLAUDE.md` | Starter `CLAUDE.md` to copy into any project |
+
+Each project's `CLAUDE.md` defines a `{{ISSUE_TRACKER_PATH}}` constant pointing to this repo's checkout path, then references these files. See [Using the Tracker with Another Project](#using-the-tracker-with-another-project) for setup details.
 
 > **Windows note:** Use `curl.exe`, not `curl`. In PowerShell, `curl` is an alias for `Invoke-WebRequest`.
 
@@ -193,7 +200,7 @@ Interactive API documentation generated from the controller XML doc comments. Us
 
 ## Using the Tracker with Another Project
 
-The Issue Tracker supports multiple projects. Create a new project in the UI or via `POST /api/projects`, then use that project's ID when creating sessions and querying issues.
+The Issue Tracker supports multiple projects. You can set up any project to use the tracker in a few steps.
 
 ### Recommended setup
 
@@ -203,7 +210,24 @@ Open the Issue Tracker in a **separate VS Code window** from your main project. 
 
 ### Connecting your other project
 
-Copy the API instructions from this project's `CLAUDE.md` into your other project's `CLAUDE.md`. Update the project ID and any project-specific details. Claude Code will then automatically interact with the tracker when working in that project.
+1. Copy `docs/claude-instructions/TEMPLATE-CLAUDE.md` from this repo into your other project's root as `CLAUDE.md`.
+2. Fill in the constants:
+   - `{{PROJECT_NAME}}` — your project's name (defaults to folder name)
+   - `{{ISSUE_TRACKER_PATH}}` — absolute path to this repo's checkout (e.g., `c:\Users\you\source\repos\issue-tracking-with-ai`)
+   - `{{ISSUE_TRACKER_API_URL}}` — the tracker API URL (default: `http://localhost:5124/api`)
+3. Leave `{{PROJECT_ID}}` as the placeholder. On the first session, Claude will detect it's unset, prompt you to register the project, and update the constant automatically.
+
+Claude Code will then read the referenced instruction files at session start and interact with the tracker — creating sessions, logging issues, and writing BATONs.
+
+### Per-project SQLite database
+
+By default, all projects share the same SQLite database (`IssueTracker.Web/issuetracker.db`). To give a project its own database, set the `ISSUETRACKER_DB_PATH` environment variable when starting the tracker:
+
+```bash
+ISSUETRACKER_DB_PATH=/path/to/myproject/issues.db dotnet run --project /path/to/issue-tracking-with-ai/IssueTracker.Web/
+```
+
+The database file will be created automatically on first run, with tables migrated and seed data inserted.
 
 ---
 
@@ -238,6 +262,14 @@ rm IssueTracker.Web/issuetracker.db
 dotnet run --project IssueTracker.Web
 ```
 
+### Per-project database (optional)
+
+To use a separate SQLite database per project, set the `ISSUETRACKER_DB_PATH` environment variable:
+
+```bash
+ISSUETRACKER_DB_PATH=/path/to/project/issues.db dotnet run --project IssueTracker.Web
+```
+
 ### SQL Server (optional)
 
 To use SQL Server instead of SQLite, edit `IssueTracker.Web/appsettings.json`:
@@ -270,10 +302,15 @@ dotnet test
 ```
 issue-tracking-with-ai/
   IssueTracker.slnx                         # .NET 10 solution file
-  CLAUDE.md                                  # API instructions for Claude Code
+  CLAUDE.md                                  # Project-specific Claude Code instructions
   README.md                                  # This file
   docs/
     BATON-Session-NNN-*.md                   # Session handoff documents
+    claude-instructions/
+      issue-tracking.md                      # Reusable issue tracking instructions
+      baton.md                               # Reusable BATON workflow instructions
+      git.md                                 # Reusable git workflow instructions
+      TEMPLATE-CLAUDE.md                     # Starter CLAUDE.md for new projects
   IssueTracker.Web/
     Program.cs                               # Startup, DI, middleware
     appsettings.json                         # Database provider, connection strings

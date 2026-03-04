@@ -1,145 +1,33 @@
 # Project Constants
-Whenever these names appear in this document or in my prompts, 
-use the values defined here.  If a command that includes the
-constant fails to work, prompt the user to see if the 
-constant should be updated.
 
+Whenever these names appear in this document or in referenced instruction files,
+use the values defined here. If a command that includes a constant fails,
+prompt the user to see if the constant should be updated.
 
+- {{PROJECT_NAME}}: Issue Tracker
+- {{PROJECT_ID}}: 1
 - {{ISSUE_TRACKER_API_URL}}: http://localhost:5124/api
+- {{ISSUE_TRACKER_PATH}}: c:\Users\denmi\source\repos\issue-tracking-with-ai
 
+# Cross-Session Workflow
 
+At the start of every session, read and follow the instructions in these files
+(in this order):
 
-# Issue Tracker — Claude Code Instructions
+1. `docs/claude-instructions/baton.md` — Read the latest BATON first to understand context
+2. `docs/claude-instructions/issue-tracking.md` — Create session, retrieve open issues
+3. `docs/claude-instructions/git.md` — Verify git is initialized and .gitignore is up to date
 
-This project includes a REST API for cross-session issue tracking. Use it to persist decisions, blockers, and action items across sessions.
+At the end of every session, follow the session-end instructions in `baton.md` and `issue-tracking.md`.
 
-**Prerequisite:** The app must be running (`dotnet run` from `IssueTracker.Web/`) before making API calls.
+# Project-Specific Instructions
 
----
-
-## Known IDs (seeded on first run)
-
-| Entity  | Id | Name    |
-|---------|----|---------|
-| Actor   | 1  | Claude  |
-| Actor   | 2  | Dennis  |
-| Actor   | 3  | System  |
-| Project | 1  | Issue Tracker |
-
----
-
-## At Session Start
-
-1. Create a session — store the returned `id` as your SessionId for this session.
-2. Retrieve open issues to understand what needs attention.
-
-```bash
-# 1. Create session (replace "Session Name" with a meaningful name)
-curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/sessions ^
-  -H "Content-Type: application/json" ^
-  -d "{\"projectId\":1, \"name\":\"Session 002 — Scaffold\"}"
-
-# 2. Get open issues
-curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?status=Open&projectId=1"
-```
-
----
-
-## During Work — When to Log Posts
-
-Log a post when something needs to survive beyond this session:
-- A decision was made (actionType: "New" or "Discuss")
-- A blocker or open question exists (actionType: "New", status will be "Open")
-- Work is deferred (actionType: "Hold")
-- An item is resolved (actionType: "Archive")
-- A review is requested from Dennis (actionType: "Check", toActorId: 2)
-
-**Do not log** routine implementation steps — only things with cross-session significance.
-
-**Bundle related items** — When multiple related items arise (e.g., several UI review points, a set of similar fixes), create a single issue with a checklist in the text rather than separate issues for each. This keeps the tracker focused and avoids noise.
-
----
-
-## API Reference
-
-### Create a new issue (root post)
-
-```bash
-curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
-  -H "Content-Type: application/json" ^
-  -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"New\", \"title\":\"Token refresh broken\", \"tags\":\"auth,token\", \"text\":\"Null ref when token is expired at middleware layer.\"}"
-```
-
-### Add discussion to an existing post
-
-```bash
-curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
-  -H "Content-Type: application/json" ^
-  -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"Discuss\", \"actionForId\":12, \"text\":\"Root cause found in TokenRefreshMiddleware line 47.\"}"
-```
-
-### Archive (close) an issue
-
-```bash
-curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
-  -H "Content-Type: application/json" ^
-  -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"Archive\", \"actionForId\":12, \"text\":\"Fixed in commit abc123. Token refresh now handles null expiry.\"}"
-```
-
-### Hold (defer) an issue
-
-```bash
-curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts ^
-  -H "Content-Type: application/json" ^
-  -d "{\"sessionId\":1, \"fromActorId\":1, \"actionType\":\"Hold\", \"actionForId\":12, \"text\":\"Waiting on auth library update from upstream.\"}"
-```
-
-### Get open issues
-
-```bash
-curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?status=Open&projectId=1"
-```
-
-### Get all posts for this session
-
-```bash
-curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?sessionId=1"
-```
-
-### Get full thread for a post
-
-```bash
-curl.exe -s {{ISSUE_TRACKER_API_URL}}/posts/12/thread
-```
-
-### Filter by tags
-
-```bash
-curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?tags=auth&status=Open&projectId=1"
-```
-
----
-
-## ActionType Reference
-
-| ActionType        | Use when...                                          | Status effect on root |
-|-------------------|------------------------------------------------------|-----------------------|
-| New               | Opening a new issue or topic                         | → Open                |
-| Discuss           | Adding commentary or investigation notes             | (no change)           |
-| Proceed As Is     | Approving something without modification             | (no change)           |
-| Proceed With Mods | Approving with changes (describe in Text)            | (no change)           |
-| Check             | Requesting Dennis to review (set toActorId: 2)       | (no change)           |
-| Hold              | Pausing/deferring work                               | → Deferred            |
-| Archive           | Closing/resolving an issue                           | → Closed              |
-| Reopen            | Reopening a closed or deferred issue                 | → Open                |
-
----
-
-## At Session End
-
-Review posts created this session, then write a BATON to `docs/BATON-Session-NNN-*.md` covering:
-- Session narrative and approach taken
-- High-level context for next session
-- Link to open issues in the tracker (retrieve via `GET {{ISSUE_TRACKER_API_URL}}/posts?status=Open&projectId=1`)
-
-The BATON carries the story. The tracker carries the ledger.
+- This is the Issue Tracker project itself — a .NET Blazor Server app with REST API
+- Run: `dotnet run` from `IssueTracker.Web/`
+- Test: `dotnet test` from solution root (app does NOT need to be running)
+- UI: `http://localhost:5124` | Swagger: `http://localhost:5124/swagger`
+- SQLite DB: `IssueTracker.Web/issuetracker.db` — delete to re-seed
+- .NET 10 uses `.slnx` format (not `.sln`)
+- In PowerShell, use `curl.exe` (not `curl`, which aliases to Invoke-WebRequest)
+- User prefers no personal names hardcoded (Actor 2 = "Human", not "Dennis")
+- Blazor Razor Language Server shows phantom errors with MudBlazor — trust `dotnet build`
