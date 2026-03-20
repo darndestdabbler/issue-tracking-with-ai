@@ -16,11 +16,12 @@ public class ActorsTests : IClassFixture<IssueTrackerFactory>
         var actors = await _client.GetFromJsonAsync<List<ActorDto>>("/api/actors", JsonOptions);
 
         Assert.NotNull(actors);
-        Assert.Equal(3, actors.Count);
+        Assert.Equal(4, actors.Count);
         Assert.Contains(actors, a => a.Name == "Claude");
         Assert.Contains(actors, a => a.Name == "Human");
         Assert.Contains(actors, a => a.Name == "System");
+        Assert.Contains(actors, a => a.Name == "Gemini");
     }
 
-    private record ActorDto(int Id, string Name);
+    private record ActorDto(int Id, string Name, string Role);
 }

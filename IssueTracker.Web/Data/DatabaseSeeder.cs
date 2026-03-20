@@ -27,9 +27,10 @@ public static class DatabaseSeeder
         if (!await db.Actors.AnyAsync())
         {
             db.Actors.AddRange(
-                new Actor { Name = "Claude" },
-                new Actor { Name = "Human" },
-                new Actor { Name = "System" }
+                new Actor { Name = "Claude", Role = "AI" },
+                new Actor { Name = "Human", Role = "Admin" },
+                new Actor { Name = "System", Role = "System" },
+                new Actor { Name = "Gemini", Role = "AI" }
             );
             await db.SaveChangesAsync();
         }
@@ -208,6 +209,39 @@ public static class DatabaseSeeder
             Status = "Open", DateTime = baseDate.AddDays(2).AddHours(4)
         };
         db.Posts.Add(post5);
+        await db.SaveChangesAsync();
+
+        // --- Thread 6: Ownership and Resolve workflow demo (Pending Review) ---
+        // New (Human) → Discuss (Claude) → Resolve (Claude) — demonstrates Pending Review status
+        var post6 = new Post
+        {
+            ProjectId = 1, SessionId = session3.Id, FromActorId = 2, // Human
+            ActionType = "New", Title = "Validate error handling in API endpoints",
+            Tags = "quality,review",
+            Text = "Several API endpoints return generic 500 errors instead of structured Problem Details responses. Need to audit and fix all controllers.",
+            Status = "Open", DateTime = baseDate.AddDays(2).AddHours(5)
+        };
+        db.Posts.Add(post6);
+        await db.SaveChangesAsync();
+
+        db.Posts.Add(new Post
+        {
+            ProjectId = 1, SessionId = session3.Id, FromActorId = 1, // Claude
+            ActionType = "Discuss", ActionForId = post6.Id,
+            Text = "Audited all 18 controllers. Found 6 endpoints returning raw exceptions. Applying Problem Details middleware and adding try-catch blocks where needed.",
+            DateTime = baseDate.AddDays(2).AddHours(5).AddMinutes(30)
+        });
+
+        var resolve6 = new Post
+        {
+            ProjectId = 1, SessionId = session3.Id, FromActorId = 1, // Claude
+            ActionType = "Resolve", ActionForId = post6.Id, ToActorId = 2, // Requesting Human review
+            Text = "All 6 endpoints now return Problem Details (RFC 7807). Ready for human review before closing.",
+            DateTime = baseDate.AddDays(2).AddHours(6)
+        };
+        db.Posts.Add(resolve6);
+        post6.Status = "Pending Review";
+        post6.ToActorId = 2; // Delegate to Human
         await db.SaveChangesAsync();
     }
 }

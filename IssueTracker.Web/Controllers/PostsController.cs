@@ -98,6 +98,10 @@ public class PostsController(PostService postService) : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(403, new { error = ex.Message });
+        }
     }
 
     /// <summary>Updates the title, tags, and/or text of a root post.</summary>

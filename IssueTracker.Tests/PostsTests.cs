@@ -253,6 +253,168 @@ public class PostsTests : IClassFixture<IssueTrackerFactory>
         Assert.Equal(HttpStatusCode.NotFound, updateResponse.StatusCode);
     }
 
+    // ---- Resolve / Pending Review ----
+
+    [Fact]
+    public async Task Create_Reply_ResolveSetssPendingReview()
+    {
+        var rootResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 2, actionType = "New",
+            title = "Resolve Test", text = "Will be resolved."
+        });
+        var root = await rootResponse.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Resolve",
+            actionForId = root!.Id, text = "Work complete."
+        });
+
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{root.Id}", JsonOptions);
+        Assert.Equal("Pending Review", updated!.Status);
+    }
+
+    [Fact]
+    public async Task Create_Reply_ReopenFromPendingReview()
+    {
+        var rootResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 2, actionType = "New",
+            title = "Reopen PR Test", text = "Will be resolved then reopened."
+        });
+        var root = await rootResponse.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Resolve",
+            actionForId = root!.Id, text = "Work complete."
+        });
+
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 2, actionType = "Reopen",
+            actionForId = root.Id, text = "Not satisfied, reopening."
+        });
+
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{root.Id}", JsonOptions);
+        Assert.Equal("Open", updated!.Status);
+    }
+
+    [Fact]
+    public async Task GetAll_FilterByPendingReview()
+    {
+        // Seed data has a "Pending Review" post from Thread 6
+        var posts = await _client.GetFromJsonAsync<List<PostDto>>(
+            "/api/posts?status=Pending Review&projectId=1", JsonOptions);
+
+        Assert.NotNull(posts);
+        Assert.True(posts.Count > 0);
+        Assert.All(posts, p => Assert.Equal("Pending Review", p.Status));
+    }
+
+    // ---- Archive enforcement ----
+
+    [Fact]
+    public async Task Create_Reply_AdminCanArchiveAnyIssue()
+    {
+        // Claude (AI, actor 1) creates issue; Human (Admin, actor 2) archives it
+        var rootResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Admin Archive Test", text = "Claude's issue."
+        });
+        var root = await rootResponse.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        var archiveResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 2, actionType = "Archive",
+            actionForId = root!.Id, text = "Admin closing."
+        });
+
+        Assert.Equal(HttpStatusCode.Created, archiveResponse.StatusCode);
+
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{root.Id}", JsonOptions);
+        Assert.Equal("Closed", updated!.Status);
+    }
+
+    [Fact]
+    public async Task Create_Reply_NonOwnerNonAdminArchiveRejected()
+    {
+        // Human (Admin, actor 2) creates issue; Claude (AI, actor 1) tries to archive → 403
+        var rootResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 2, actionType = "New",
+            title = "Reject Archive Test", text = "Human's issue."
+        });
+        var root = await rootResponse.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        var archiveResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Archive",
+            actionForId = root!.Id, text = "Claude trying to close."
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, archiveResponse.StatusCode);
+
+        // Verify status unchanged
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{root.Id}", JsonOptions);
+        Assert.Equal("Open", updated!.Status);
+    }
+
+    [Fact]
+    public async Task Create_Reply_DelegateCanArchive()
+    {
+        // Human (actor 2) creates issue, then resolves with ToActorId=1 (Claude as delegate)
+        var rootResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 2, actionType = "New",
+            title = "Delegate Archive Test", text = "Human's issue, will delegate."
+        });
+        var root = await rootResponse.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        // Owner resolves and delegates to Claude
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 2, actionType = "Resolve",
+            actionForId = root!.Id, toActorId = 1, text = "Delegating review to Claude."
+        });
+
+        // Claude (delegate) archives
+        var archiveResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Archive",
+            actionForId = root.Id, text = "Delegate closing."
+        });
+
+        Assert.Equal(HttpStatusCode.Created, archiveResponse.StatusCode);
+
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{root.Id}", JsonOptions);
+        Assert.Equal("Closed", updated!.Status);
+    }
+
+    [Fact]
+    public async Task Create_Reply_ToActorIdPropagatedToRoot()
+    {
+        var rootResponse = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Propagation Test", text = "Test ToActorId propagation."
+        });
+        var root = await rootResponse.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+        Assert.Null(root!.ToActorId);
+
+        // Post a Resolve with ToActorId
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Resolve",
+            actionForId = root.Id, toActorId = 2, text = "Assigning to Human."
+        });
+
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{root.Id}", JsonOptions);
+        Assert.Equal(2, updated!.ToActorId);
+    }
+
     // ---- DTOs ----
 
     private record PostDto(

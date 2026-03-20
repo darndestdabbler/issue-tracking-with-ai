@@ -8,4 +8,7 @@ public class Actor
 
     /// <summary>Display name (e.g. "Claude", "Human", "System").</summary>
     public string Name { get; set; } = "";
+
+    /// <summary>Role governing permissions: "Admin", "User", or "AI". Admins can archive any issue.</summary>
+    public string Role { get; set; } = "User";
 }

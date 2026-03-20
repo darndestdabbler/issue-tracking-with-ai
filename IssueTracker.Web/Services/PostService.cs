@@ -9,11 +9,13 @@ public class PostService(AppDbContext db)
 {
     /// <summary>
     /// Creates a post, deriving ProjectId from its session and propagating status
-    /// changes (Hold→Deferred, Archive→Closed, Reopen→Open) to the root post.
+    /// changes (Hold→Deferred, Archive→Closed, Resolve→Pending Review, Reopen→Open) to the root post.
+    /// Archive is restricted to the issue owner, a delegated reviewer (root ToActorId), or an Admin.
     /// </summary>
     /// <param name="post">The post to create. SessionId must reference an existing session.</param>
     /// <returns>The created post with its generated Id.</returns>
     /// <exception cref="ArgumentException">Thrown when the referenced session does not exist.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a non-owner/non-Admin attempts to archive.</exception>
     public async Task<Post> CreatePostAsync(Post post)
     {
         // Derive ProjectId from Session
@@ -32,13 +34,33 @@ public class PostService(AppDbContext db)
             var root = await FindRootAsync(post.ActionForId.Value);
             if (root is not null)
             {
+                // Archive enforcement: only owner, delegate, or Admin can archive
+                if (post.ActionType == "Archive")
+                {
+                    var actor = await db.Actors.FindAsync(post.FromActorId);
+                    if (actor?.Role != "Admin"
+                        && post.FromActorId != root.FromActorId
+                        && post.FromActorId != root.ToActorId)
+                    {
+                        throw new InvalidOperationException(
+                            "Only the issue owner, a delegated reviewer, or an Admin can archive.");
+                    }
+                }
+
                 root.Status = post.ActionType switch
                 {
                     "Hold"    => "Deferred",
                     "Archive" => "Closed",
+                    "Resolve" => "Pending Review",
                     "Reopen"  => "Open",
                     _         => root.Status
                 };
+
+                // Propagate ToActorId to root post to track current assignee
+                if (post.ToActorId.HasValue)
+                {
+                    root.ToActorId = post.ToActorId;
+                }
             }
         }
 

@@ -8,6 +8,12 @@ prompt the user to see if the constant should be updated.
 - {{PROJECT_ID}}: [Will be set automatically on first session]
 - {{ISSUE_TRACKER_API_URL}}: http://localhost:5124/api
 
+
+# Permissions from Human
+
+Please refer to the permissions instructions in @docs/claude-instructions/permission-management.md
+
+
 # Cross-Session Workflow
 
 At the start of every session, read and follow the instructions in these files
