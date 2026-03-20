@@ -45,6 +45,19 @@ public class PostsController(PostService postService) : ControllerBase
         return Ok(posts.Select(Map));
     }
 
+    /// <summary>Returns the most recent baton-tagged root post for a project.</summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <returns>The latest baton post.</returns>
+    /// <response code="200">Baton found.</response>
+    /// <response code="404">No baton posts found for this project.</response>
+    [HttpGet("latest-baton")]
+    public async Task<IActionResult> GetLatestBaton([FromQuery] int projectId)
+    {
+        var post = await postService.GetLatestBatonAsync(projectId);
+        if (post is null) return NotFound();
+        return Ok(Map(post));
+    }
+
     /// <summary>Returns a single post by ID.</summary>
     /// <param name="id">The post ID.</param>
     /// <returns>The post.</returns>

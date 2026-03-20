@@ -66,6 +66,38 @@ public class PostService(AppDbContext db)
 
         db.Posts.Add(post);
         await db.SaveChangesAsync();
+
+        // Auto-archive: when a new baton-tagged root post is created,
+        // close all previously-Open baton posts for the same project.
+        if (post.ActionForId is null && post.ActionType == "New" && HasTag(post.Tags, "baton"))
+        {
+            var openBatons = await db.Posts
+                .Where(p => p.ProjectId == post.ProjectId
+                    && p.ActionForId == null
+                    && p.Status == "Open"
+                    && p.Id != post.Id
+                    && p.Tags != null && EF.Functions.Like(p.Tags, "%baton%"))
+                .ToListAsync();
+
+            foreach (var oldBaton in openBatons)
+            {
+                oldBaton.Status = "Closed";
+                db.Posts.Add(new Post
+                {
+                    ProjectId = oldBaton.ProjectId,
+                    SessionId = post.SessionId,
+                    FromActorId = 3, // System actor
+                    ActionType = "Archive",
+                    ActionForId = oldBaton.Id,
+                    Text = $"Auto-archived: superseded by baton post #{post.Id}.",
+                    DateTime = DateTime.UtcNow
+                });
+            }
+
+            if (openBatons.Count > 0)
+                await db.SaveChangesAsync();
+        }
+
         return post;
     }
 
@@ -227,6 +259,26 @@ public class PostService(AppDbContext db)
         await db.SaveChangesAsync();
         return post;
     }
+
+    /// <summary>Returns the most recent baton-tagged root post for a project, or null if none exist.</summary>
+    /// <param name="projectId">The project to search in.</param>
+    /// <returns>The latest baton post with actor navigation properties, or null.</returns>
+    public async Task<Post?> GetLatestBatonAsync(int projectId)
+    {
+        return await db.Posts
+            .Include(p => p.FromActor)
+            .Include(p => p.ToActor)
+            .Where(p => p.ProjectId == projectId
+                && p.ActionForId == null
+                && p.Tags != null && EF.Functions.Like(p.Tags, "%baton%"))
+            .OrderByDescending(p => p.DateTime)
+            .FirstOrDefaultAsync();
+    }
+
+    /// <summary>Returns true if the comma-delimited tags string contains the given tag (case-insensitive).</summary>
+    private static bool HasTag(string? tags, string tag)
+        => tags?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+               .Any(t => t.Equals(tag, StringComparison.OrdinalIgnoreCase)) == true;
 
     /// <summary>Walks up the ActionForId chain to find the root post of a thread.</summary>
     private async Task<Post?> FindRootAsync(int postId)

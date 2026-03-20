@@ -415,6 +415,209 @@ public class PostsTests : IClassFixture<IssueTrackerFactory>
         Assert.Equal(2, updated!.ToActorId);
     }
 
+    // ---- BATON auto-archive ----
+
+    [Fact]
+    public async Task Create_BatonPost_AutoArchivesPreviousOpenBaton()
+    {
+        var r1 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "BATON 1", tags = "baton", text = "First baton."
+        });
+        var baton1 = await r1.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        var r2 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "BATON 2", tags = "baton", text = "Second baton."
+        });
+        var baton2 = await r2.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        // First baton should now be Closed
+        var updated1 = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{baton1!.Id}", JsonOptions);
+        Assert.Equal("Closed", updated1!.Status);
+
+        // Second baton should be Open
+        Assert.Equal("Open", baton2!.Status);
+
+        // Thread for first baton should contain a system Archive post
+        var thread = await _client.GetFromJsonAsync<List<PostDto>>(
+            $"/api/posts/{baton1.Id}/thread", JsonOptions);
+        Assert.Contains(thread!, p => p.ActionType == "Archive" && p.FromActorId == 3);
+    }
+
+    [Fact]
+    public async Task Create_BatonPost_AutoArchivesMultipleOpenBatons()
+    {
+        var r1 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Multi-BATON 1", tags = "baton", text = "First."
+        });
+        var b1 = await r1.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        var r2 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Multi-BATON 2", tags = "baton", text = "Second."
+        });
+        var b2 = await r2.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        // Reopen the first so we have two open batons
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Reopen",
+            actionForId = b1!.Id, text = "Reopening."
+        });
+
+        // Create a third baton — should archive both
+        var r3 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Multi-BATON 3", tags = "baton", text = "Third."
+        });
+        var b3 = await r3.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        var u1 = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{b1.Id}", JsonOptions);
+        var u2 = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{b2!.Id}", JsonOptions);
+        Assert.Equal("Closed", u1!.Status);
+        Assert.Equal("Closed", u2!.Status);
+        Assert.Equal("Open", b3!.Status);
+    }
+
+    [Fact]
+    public async Task Create_BatonPost_DoesNotArchiveDifferentProjectBaton()
+    {
+        // Create a baton in project 1
+        var r1 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Project1 BATON", tags = "baton", text = "Project 1 baton."
+        });
+        var baton1 = await r1.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        // Create a new project and session
+        var projResponse = await _client.PostAsJsonAsync("/api/projects", new { name = "BatonTestProject" });
+        var proj = await projResponse.Content.ReadFromJsonAsync<ProjectDto>(JsonOptions);
+
+        var sessResponse = await _client.PostAsJsonAsync("/api/sessions", new
+        {
+            projectId = proj!.Id, name = "Baton Test Session"
+        });
+        var sess = await sessResponse.Content.ReadFromJsonAsync<SessionDto>(JsonOptions);
+
+        // Create a baton in the new project
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = sess!.Id, fromActorId = 1, actionType = "New",
+            title = "Project2 BATON", tags = "baton", text = "Project 2 baton."
+        });
+
+        // Project 1 baton should still be Open
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{baton1!.Id}", JsonOptions);
+        Assert.Equal("Open", updated!.Status);
+    }
+
+    [Fact]
+    public async Task Create_BatonReply_DoesNotTriggerAutoArchive()
+    {
+        var r1 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "BATON NoArchive", tags = "baton", text = "Should stay open."
+        });
+        var baton = await r1.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        // Reply with "baton" tag — should NOT trigger auto-archive
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Discuss",
+            actionForId = baton!.Id, tags = "baton", text = "Discussion reply."
+        });
+
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{baton.Id}", JsonOptions);
+        Assert.Equal("Open", updated!.Status);
+    }
+
+    [Fact]
+    public async Task Create_BatonPost_WithMultipleTags_AutoArchives()
+    {
+        var r1 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Tagged BATON 1", tags = "baton,session-014", text = "First."
+        });
+        var baton1 = await r1.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Tagged BATON 2", tags = "baton,session-015", text = "Second."
+        });
+
+        var updated = await _client.GetFromJsonAsync<PostDto>($"/api/posts/{baton1!.Id}", JsonOptions);
+        Assert.Equal("Closed", updated!.Status);
+    }
+
+    // ---- GET /api/posts/latest-baton ----
+
+    [Fact]
+    public async Task GetLatestBaton_ReturnsMostRecentBaton()
+    {
+        var r1 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Latest Test 1", tags = "baton", text = "Older baton."
+        });
+        var baton1 = await r1.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        var r2 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Latest Test 2", tags = "baton", text = "Newer baton."
+        });
+        var baton2 = await r2.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        var latest = await _client.GetFromJsonAsync<PostDto>(
+            "/api/posts/latest-baton?projectId=1", JsonOptions);
+
+        Assert.NotNull(latest);
+        Assert.Equal(baton2!.Id, latest.Id);
+    }
+
+    [Fact]
+    public async Task GetLatestBaton_NoProject_Returns404()
+    {
+        var response = await _client.GetAsync("/api/posts/latest-baton?projectId=9999");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetLatestBaton_ReturnsClosedBatonIfLatest()
+    {
+        var r1 = await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "New",
+            title = "Closed Baton Test", tags = "baton", text = "Will be closed."
+        });
+        var baton = await r1.Content.ReadFromJsonAsync<PostDto>(JsonOptions);
+
+        // Manually archive it
+        await _client.PostAsJsonAsync("/api/posts", new
+        {
+            sessionId = 1, fromActorId = 1, actionType = "Archive",
+            actionForId = baton!.Id, text = "Manual close."
+        });
+
+        var latest = await _client.GetFromJsonAsync<PostDto>(
+            "/api/posts/latest-baton?projectId=1", JsonOptions);
+
+        Assert.NotNull(latest);
+        // Should return the closed baton (it's the most recent by DateTime)
+        Assert.Equal("Closed", latest.Status);
+    }
+
     // ---- DTOs ----
 
     private record PostDto(
@@ -424,4 +627,6 @@ public class PostsTests : IClassFixture<IssueTrackerFactory>
         int? ActionForId, string? Status, string? Tags, string Text);
 
     private record PagedResponse(List<PostDto> Items, int TotalCount);
+    private record ProjectDto(int Id, string Name);
+    private record SessionDto(int Id, string Name, int ProjectId);
 }
