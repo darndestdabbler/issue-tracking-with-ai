@@ -47,11 +47,20 @@ public class PostService(AppDbContext db)
                     }
                 }
 
+                // When the owner or an Admin resolves, skip Pending Review and go straight to Closed
+                var resolveStatus = "Pending Review";
+                if (post.ActionType == "Resolve")
+                {
+                    var actor = await db.Actors.FindAsync(post.FromActorId);
+                    if (post.FromActorId == root.FromActorId || actor?.Role == "Admin")
+                        resolveStatus = "Closed";
+                }
+
                 root.Status = post.ActionType switch
                 {
                     "Hold"    => "Deferred",
                     "Archive" => "Closed",
-                    "Resolve" => "Pending Review",
+                    "Resolve" => resolveStatus,
                     "Reopen"  => "Open",
                     _         => root.Status
                 };

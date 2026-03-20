@@ -46,6 +46,9 @@ public class ActorDto
 
     /// <summary>Display name.</summary>
     public string Name { get; set; } = "";
+
+    /// <summary>Role governing permissions: "Admin", "User", or "AI".</summary>
+    public string Role { get; set; } = "User";
 }
 
 /// <summary>Client-side DTO for posts (issues and replies).</summary>

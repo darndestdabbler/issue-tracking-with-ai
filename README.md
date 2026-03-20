@@ -195,7 +195,7 @@ curl.exe -s -X POST http://localhost:5124/api/posts ^
 | Proceed With Mods | Approving with changes (describe in text) | (no change) | Anyone |
 | Check | Requesting human review (set toActorId: 2) | (no change) | Anyone |
 | Hold | Pausing or deferring work | &rarr; Deferred | Anyone |
-| Resolve | Marking work complete, awaiting review | &rarr; Pending Review | Anyone |
+| Resolve | Marking work complete | &rarr; Pending Review (or Closed if owner/Admin) | Anyone |
 | Archive | Closing an issue (verified by owner) | &rarr; Closed | Owner, delegate, Admin |
 | Reopen | Reopening a closed, deferred, or pending issue | &rarr; Open | Anyone |
 
@@ -211,10 +211,10 @@ The main workspace for viewing and managing issues.
 
 - **Filter bar** — Filter by project, session, status (Open / Deferred / Closed / Pending Review), and tags
 - **DataGrid** — Server-side paging (10, 25, or 50 per page) and sortable columns
-- **Quick-action buttons** — Hold (defer), Archive (close), or Reopen an issue with one click
+- **Quick-action buttons** — Resolve, Hold (defer), Archive (close), or Reopen an issue with one click; buttons shown depend on current status
 - **Expandable threads** — Click any issue to see its full discussion timeline with color-coded action types
 - **Create Issue** — Opens a dialog to log a new issue with title, description, tags, and action type
-- **Reply** — Add discussion, decisions, or status changes to an existing issue
+- **Reply** — Add discussion, decisions, or status changes to an existing issue; available actions are filtered by issue status and actor permissions
 - **Edit** — Modify the title, tags, or description of a root issue
 - **Markdown rendering** — Post text renders as markdown with configurable truncation and a "View full" modal for long content
 
@@ -439,7 +439,7 @@ Actor    1──*  Post  (as ToActor, optional)
 
 A root post starts as **Open** when created with `ActionType: New`. Child posts drive status changes:
 - `Hold` moves it to **Deferred**
-- `Resolve` moves it to **Pending Review** (signals work complete, awaiting approval)
+- `Resolve` moves it to **Pending Review** when a non-owner resolves, or directly to **Closed** when the owner or an Admin resolves (no review needed)
 - `Archive` moves it to **Closed** (requires ownership: creator, delegate, or Admin)
 - `Reopen` moves it back to **Open** from any non-Open status
 

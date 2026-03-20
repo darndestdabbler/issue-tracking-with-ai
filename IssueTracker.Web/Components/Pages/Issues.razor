@@ -45,6 +45,7 @@
                 <MudSelectItem Value="@((string?)null)">All</MudSelectItem>
                 <MudSelectItem Value='@("Open")'>Open</MudSelectItem>
                 <MudSelectItem Value='@("Deferred")'>Deferred</MudSelectItem>
+                <MudSelectItem Value='@("Pending Review")'>Pending Review</MudSelectItem>
                 <MudSelectItem Value='@("Closed")'>Closed</MudSelectItem>
             </MudSelect>
         </MudItem>
@@ -90,12 +91,19 @@
                 }
                 @if (context.Item.Status == "Open" || context.Item.Status == "Deferred")
                 {
+                    <MudTooltip Text="Resolve (Pending Review)">
+                        <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small"
+                                       OnClick="@(() => QuickAction(context.Item.Id, "Resolve"))" />
+                    </MudTooltip>
+                }
+                @if (context.Item.Status == "Open" || context.Item.Status == "Deferred" || context.Item.Status == "Pending Review")
+                {
                     <MudTooltip Text="Archive (Close)">
                         <MudIconButton Icon="@Icons.Material.Filled.Archive" Size="Size.Small"
                                        OnClick="@(() => QuickAction(context.Item.Id, "Archive"))" />
                     </MudTooltip>
                 }
-                @if (context.Item.Status == "Closed" || context.Item.Status == "Deferred")
+                @if (context.Item.Status == "Closed" || context.Item.Status == "Deferred" || context.Item.Status == "Pending Review")
                 {
                     <MudTooltip Text="Reopen">
                         <MudIconButton Icon="@Icons.Material.Filled.Replay" Size="Size.Small"
@@ -146,7 +154,7 @@
                 </MudCardContent>
                 <MudCardActions>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                               OnClick="@(() => OpenReplyDialog(context.Item.Id))">
+                               OnClick="@(() => OpenReplyDialog(context.Item))">
                         Reply
                     </MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small"
@@ -293,13 +301,16 @@
         }
     }
 
-    private async Task OpenReplyDialog(int rootPostId)
+    private async Task OpenReplyDialog(PostDto rootPost)
     {
         var parameters = new MudBlazor.DialogParameters();
         parameters.Add("Sessions", sessions);
         parameters.Add("Actors", actors);
-        parameters.Add("RootPostId", rootPostId);
+        parameters.Add("RootPostId", rootPost.Id);
         parameters.Add("FilterSessionId", selectedSessionId);
+        parameters.Add("RootPostStatus", rootPost.Status ?? "Open");
+        parameters.Add("RootPostFromActorId", rootPost.FromActorId);
+        parameters.Add("RootPostToActorId", rootPost.ToActorId);
 
         var dialog = await DialogService.ShowAsync<ReplyDialog>("Reply to Issue", parameters);
         var result = await dialog.Result;
@@ -352,9 +363,10 @@
             var sessionId = selectedSessionId ?? sessions.LastOrDefault()?.Id ?? 1;
             var defaultText = actionType switch
             {
-                "Hold"   => "Deferred via quick action",
-                "Reopen" => "Reopened via quick action",
-                _        => "Closed via quick action"
+                "Hold"    => "Deferred via quick action",
+                "Resolve" => "Resolved via quick action",
+                "Reopen"  => "Reopened via quick action",
+                _         => "Closed via quick action"
             };
 
             var postRequest = new
@@ -371,9 +383,10 @@
             {
                 var successMsg = actionType switch
                 {
-                    "Hold"   => "Issue deferred",
-                    "Reopen" => "Issue reopened",
-                    _        => "Issue closed"
+                    "Hold"    => "Issue deferred",
+                    "Resolve" => "Issue marked for review",
+                    "Reopen"  => "Issue reopened",
+                    _         => "Issue closed"
                 };
                 Snackbar.Add(successMsg, Severity.Success);
                 if (dataGrid is not null) await dataGrid.ReloadServerData();
