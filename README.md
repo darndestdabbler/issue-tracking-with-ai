@@ -12,6 +12,7 @@ A cross-session issue tracker that gives AI coding assistants structured memory 
 - [How Claude Code Uses the API](#how-claude-code-uses-the-api)
 - [How You Use the UI](#how-you-use-the-ui)
 - [Using the Tracker with Another Project](#using-the-tracker-with-another-project)
+- [Exporting a Project to SQLite](#exporting-a-project-to-sqlite)
 - [Prerequisites and Setup](#prerequisites-and-setup)
 - [Running Tests](#running-tests)
 - [Project Structure](#project-structure)
@@ -31,6 +32,8 @@ But BATONs are linear. Each one captures a single session's story. Twelve sessio
 
 This project fills the gap. It's a structured, queryable issue tracker that runs alongside your project. Claude Code logs decisions, blockers, and resolutions via REST API calls during each session. You review, filter, and manage them through a web UI at any time. The tracker accumulates context across sessions so that neither you nor your AI assistant has to hold it all in memory.
 
+**BATONs are stored as tracker posts.** Each BATON is a post tagged `baton`. When a new BATON is created, the system automatically archives all previous BATONs for that project. The latest BATON is always retrievable via a dedicated API endpoint.
+
 Together, BATONs and the tracker form a complete handoff system:
 
 > *The BATON carries the story. The tracker carries the ledger.*
@@ -42,7 +45,7 @@ Together, BATONs and the tracker form a complete handoff system:
 The Issue Tracker is a single .NET application that serves both a **REST API** and a **Blazor Server web UI** on the same port.
 
 ```
-Claude Code (curl) ──> REST API ──> SQLite DB <── Blazor UI (browser)
+Claude Code (curl) ──> REST API ──> SQL Server DB <── Blazor UI (browser)
 ```
 
 - **Claude Code** interacts via `curl` calls to the REST API, guided by instructions in your project's `CLAUDE.md` file.
@@ -50,6 +53,16 @@ Claude Code (curl) ──> REST API ──> SQLite DB <── Blazor UI (browser
 - **Swagger** is available at `/swagger` for interactive API exploration.
 
 The data model is intentionally simple: everything is a **Post**. An issue is a root post. Replies, status changes, and review requests are child posts linked to their parent. Status flows automatically — close a reply with `Archive` and the root issue moves to `Closed`.
+
+### Key capabilities
+
+- **Multi-project support** — one tracker serves multiple projects, each with its own sessions and issues
+- **BATON auto-archive** — creating a new BATON automatically closes older BATONs for the same project
+- **Markdown rendering** — issue text supports full markdown with configurable truncation and a "view full" modal
+- **Pending Review status** — an IV&V workflow where `Resolve` marks work complete and only the owner or delegate can `Archive`
+- **Issue ownership enforcement** — only the issue creator, assigned delegate, or an Admin can archive an issue
+- **SQLite export** — archive a project's issues as a portable SQLite file for git storage
+- **Dual database provider** — runs on SQL Server (primary) or SQLite, switchable via configuration
 
 ---
 
@@ -59,9 +72,10 @@ Each coding session follows this workflow:
 
 ### 1. Read context
 
-Load the BATON from the previous session (`docs/BATON-Session-NNN-*.md`) and review open issues:
+Retrieve the latest BATON and review open issues:
 
 ```bash
+curl.exe -s "http://localhost:5124/api/posts/latest-baton?projectId=1"
 curl.exe -s "http://localhost:5124/api/posts?status=Open&projectId=1"
 ```
 
@@ -72,7 +86,7 @@ Identify what to tackle based on open issues and the BATON narrative. Create a s
 ```bash
 curl.exe -s -X POST http://localhost:5124/api/sessions ^
   -H "Content-Type: application/json" ^
-  -d "{\"projectId\":1, \"name\":\"Session 013 — README\"}"
+  -d "{\"ProjectId\":1, \"Name\":\"Session 013 — README\"}"
 ```
 
 ### 3. Execute
@@ -89,20 +103,23 @@ Log events that need to survive beyond this session:
 | Investigation notes or commentary | `Discuss` |
 | Work deferred for later | `Hold` |
 | Issue resolved | `Archive` |
+| Work complete, awaiting review | `Resolve` |
 | Need human review | `Check` |
+| Reopening a closed/deferred item | `Reopen` |
 
 **Bundle related items** — create a single issue with a checklist rather than many small issues.
 
 ### 5. Write the BATON
 
-Summarize the session and save to `docs/BATON-Session-NNN-Description.md`:
+Create a BATON post via the API with the tag `baton`. The system automatically archives previous BATONs for the project. The BATON should summarize:
 - What was accomplished
+- Key decisions and their rationale
 - What the next session should focus on
-- Link to open issues in the tracker
+- Open issue numbers for reference
 
 ### 6. Commit to git
 
-Preserve code changes, the BATON document, and any tracker database changes.
+Preserve code changes and any configuration updates.
 
 ---
 
@@ -113,8 +130,9 @@ Claude Code reads `CLAUDE.md` from your project root at the start of every sessi
 | File | Purpose |
 |---|---|
 | `issue-tracking.md` | Issue tracking workflow, first-session project registration, full API reference |
-| `baton.md` | Session handoff (BATON) workflow — when to read, when to write, naming conventions |
+| `baton.md` | BATON workflow — read via API at session start, write via POST at session end |
 | `git.md` | Git workflow — initialization, .gitignore management, commit and push behavior |
+| `permission-management.md` | Auto-add permission rules to `settings.local.json` on denial |
 | `TEMPLATE-CLAUDE.md` | Starter `CLAUDE.md` to copy into any project |
 
 Each project copies these files into its own `docs/claude-instructions/` folder and renames `TEMPLATE-CLAUDE.md` to `CLAUDE.md` in the project root. See [Using the Tracker with Another Project](#using-the-tracker-with-another-project) for setup details.
@@ -123,11 +141,12 @@ Each project copies these files into its own `docs/claude-instructions/` folder 
 
 ### Seeded actor IDs
 
-| Actor | ID | Purpose |
-|---|---|---|
-| Claude | 1 | AI assistant (fromActorId when Claude logs posts) |
-| Human | 2 | You (fromActorId when you log posts, toActorId for review requests) |
-| System | 3 | Automated processes |
+| Actor | ID | Role | Purpose |
+|---|---|---|---|
+| Claude | 1 | AI | AI assistant (fromActorId when Claude logs posts) |
+| Human | 2 | Admin | You (fromActorId when you log posts, toActorId for review requests) |
+| System | 3 | System | Automated processes (BATON auto-archive) |
+| Gemini | 4 | AI | Alternative AI assistant |
 
 ### Example: Create a new issue
 
@@ -163,6 +182,7 @@ curl.exe -s -X POST http://localhost:5124/api/posts ^
 | Proceed With Mods | Approving with changes (describe in text) | (no change) |
 | Check | Requesting human review (set toActorId: 2) | (no change) |
 | Hold | Pausing or deferring work | &rarr; Deferred |
+| Resolve | Marking work complete, awaiting review | &rarr; Pending Review |
 | Archive | Closing or resolving an issue | &rarr; Closed |
 | Reopen | Reopening a closed or deferred issue | &rarr; Open |
 
@@ -176,13 +196,14 @@ Open `http://localhost:5124` in your browser while the app is running.
 
 The main workspace for viewing and managing issues.
 
-- **Filter bar** — Filter by project, session, status (Open / Deferred / Closed), and tags
+- **Filter bar** — Filter by project, session, status (Open / Deferred / Closed / Pending Review), and tags
 - **DataGrid** — Server-side paging (10, 25, or 50 per page) and sortable columns
 - **Quick-action buttons** — Hold (defer), Archive (close), or Reopen an issue with one click
 - **Expandable threads** — Click any issue to see its full discussion timeline with color-coded action types
 - **Create Issue** — Opens a dialog to log a new issue with title, description, tags, and action type
 - **Reply** — Add discussion, decisions, or status changes to an existing issue
 - **Edit** — Modify the title, tags, or description of a root issue
+- **Markdown rendering** — Post text renders as markdown with configurable truncation and a "View full" modal for long content
 
 ### Projects and Sessions page (`/sessions`)
 
@@ -219,15 +240,25 @@ Open the Issue Tracker in a **separate VS Code window** from your main project. 
 
 Claude Code will then read the referenced instruction files at session start and interact with the tracker — creating sessions, logging issues, and writing BATONs.
 
-### Per-project SQLite database
+---
 
-By default, all projects share the same SQLite database (`IssueTracker.Web/issuetracker.db`). To give a project its own database, set the `ISSUETRACKER_DB_PATH` environment variable when starting the tracker:
+## Exporting a Project to SQLite
+
+When a project reaches end of life, you can export its issues as a portable SQLite file to archive alongside the project in git.
 
 ```bash
-ISSUETRACKER_DB_PATH=/path/to/myproject/issues.db dotnet run --project /path/to/issue-tracking-with-ai/IssueTracker.Web/
+curl.exe -o project-archive.sqlite http://localhost:5124/api/projects/4/export/sqlite
 ```
 
-The database file will be created automatically on first run, with tables migrated and seed data inserted.
+The exported file contains:
+- The project record
+- All sessions for the project
+- All posts (issues, replies, BATONs, status changes)
+- All actors referenced by those posts
+
+The file is self-contained — open it with any SQLite client (DB Browser for SQLite, DataGrip, `sqlite3` CLI) to browse the archived issues. The central database is not affected; deletion from the central DB is a separate decision.
+
+This endpoint is also available via Swagger at `/swagger`.
 
 ---
 
@@ -236,6 +267,7 @@ The database file will be created automatically on first run, with tables migrat
 ### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (or later)
+- **SQL Server** on localhost (default instance, Windows Authentication) — or SQLite via config
 
 ### Getting started
 
@@ -250,19 +282,26 @@ The app will be available at `http://localhost:5124`.
 ### What happens on first run
 
 - EF Core migrations are applied automatically
-- A SQLite database (`IssueTracker.Web/issuetracker.db`) is created
-- Seed data is inserted: three actors (Claude, Human, System) and two sample projects
+- Seed data is inserted: four actors (Claude, Human, System, Gemini) and two sample projects
+- Demo sessions and issues are created showing the workflow in action
 
-### Database reset
+### Database configuration
 
-Delete the database file and restart to re-seed from scratch:
+The database provider is controlled by `DatabaseProvider` in `IssueTracker.Web/appsettings.json`:
 
-```bash
-rm IssueTracker.Web/issuetracker.db
-dotnet run --project IssueTracker.Web
+```json
+{
+  "DatabaseProvider": "SqlServer",
+  "ConnectionStrings": {
+    "SqlServer": "Server=localhost;Database=IssueTracker;Trusted_Connection=True;TrustServerCertificate=True",
+    "SQLite": "Data Source=issuetracker.db"
+  }
+}
 ```
 
-### Per-project database (optional)
+Set `"DatabaseProvider": "SQLite"` to use SQLite instead of SQL Server.
+
+### Per-project SQLite database
 
 To use a separate SQLite database per project, set the `ISSUETRACKER_DB_PATH` environment variable:
 
@@ -270,17 +309,15 @@ To use a separate SQLite database per project, set the `ISSUETRACKER_DB_PATH` en
 ISSUETRACKER_DB_PATH=/path/to/project/issues.db dotnet run --project IssueTracker.Web
 ```
 
-### SQL Server (optional)
+The database file will be created automatically on first run, with tables migrated and seed data inserted.
 
-To use SQL Server instead of SQLite, edit `IssueTracker.Web/appsettings.json`:
+### Database reset (SQLite only)
 
-```json
-{
-  "DatabaseProvider": "SqlServer",
-  "ConnectionStrings": {
-    "SqlServer": "Server=(localdb)\\mssqllocaldb;Database=IssueTracker;Trusted_Connection=True;"
-  }
-}
+Delete the database file and restart to re-seed from scratch:
+
+```bash
+rm IssueTracker.Web/issuetracker.db
+dotnet run --project IssueTracker.Web
 ```
 
 ---
@@ -291,9 +328,9 @@ To use SQL Server instead of SQLite, edit `IssueTracker.Web/appsettings.json`:
 dotnet test
 ```
 
-- 28 xUnit integration tests using `WebApplicationFactory` with in-memory SQLite
+- 56 xUnit integration tests using `WebApplicationFactory` with in-memory SQLite
 - The app does **not** need to be running — the test factory spins up its own host
-- Tests cover all API endpoints: posts, sessions, projects, and actors
+- Tests cover: posts (filtering, paging, sorting, status transitions, threading, edit), sessions (CRUD, archive/restore), projects (CRUD, SQLite export), actors, and markdown rendering
 
 ---
 
@@ -305,11 +342,11 @@ issue-tracking-with-ai/
   CLAUDE.md                                  # Project-specific Claude Code instructions
   README.md                                  # This file
   docs/
-    BATON-Session-NNN-*.md                   # Session handoff documents
     claude-instructions/
       issue-tracking.md                      # Reusable issue tracking instructions
       baton.md                               # Reusable BATON workflow instructions
       git.md                                 # Reusable git workflow instructions
+      permission-management.md               # Permission auto-add instructions
       TEMPLATE-CLAUDE.md                     # Starter CLAUDE.md for new projects
   IssueTracker.Web/
     Program.cs                               # Startup, DI, middleware
@@ -318,16 +355,18 @@ issue-tracking-with-ai/
       Post.cs                                # Issues, replies, status changes
       Session.cs                             # Work sessions within a project
       Project.cs                             # Top-level project container
-      Actor.cs                               # Participants (Claude, Human, System)
+      Actor.cs                               # Participants (Claude, Human, System, Gemini)
     Data/
       AppDbContext.cs                         # EF Core DbContext
       DatabaseSeeder.cs                      # Auto-migration and seed data
     Services/
       PostService.cs                         # Query, create, and status logic
+      MarkdownService.cs                     # Markdig pipeline for rendering
+      ProjectExportService.cs                # SQLite export for project archival
     Controllers/
       PostsController.cs                     # /api/posts endpoints
       SessionsController.cs                  # /api/sessions endpoints
-      ProjectsController.cs                  # /api/projects endpoints
+      ProjectsController.cs                  # /api/projects endpoints + SQLite export
       ActorsController.cs                    # /api/actors endpoints
     Components/
       Pages/
@@ -338,13 +377,20 @@ issue-tracking-with-ai/
       ReplyDialog.razor                      # Reply and action form
       EditIssueDialog.razor                  # Edit root post form
       ProjectDialog.razor                    # Create/edit project form
+      MarkdownRenderer.razor                 # Markdown-to-HTML component
+      MarkdownViewerDialog.razor             # Full-content markdown modal
       SharedDtos.cs                          # Shared DTOs for Blazor components
   IssueTracker.Tests/
     IssueTrackerFactory.cs                   # WebApplicationFactory with in-memory SQLite
     PostsTests.cs                            # Post endpoint tests
     SessionsTests.cs                         # Session endpoint tests
     ProjectsTests.cs                         # Project endpoint tests
+    ProjectExportTests.cs                    # SQLite export tests
     ActorsTests.cs                           # Actor endpoint tests
+    MarkdownServiceTests.cs                  # Markdown rendering tests
+  scripts/
+    import-batons.sh                         # One-shot historical BATON import script
+  Migrations.SQLite.backup/                  # Archived SQLite migrations (reference only)
 ```
 
 ---
@@ -369,13 +415,24 @@ Actor    1──*  Post  (as ToActor, optional)
        Open ──── Hold ───> Deferred
          │                    │
          │                    │
+         ├─── Resolve ──> Pending Review
+         │                    │
          └──── Archive ──>  Closed
                               ^
                               │
-              Deferred ─ Archive ─┘
+        Deferred ── Archive ──┘
+   Pending Review ─ Archive ──┘
 ```
 
-A root post starts as **Open** when created with `ActionType: New`. Child posts drive status changes: `Hold` moves it to **Deferred**, `Archive` moves it to **Closed**, and `Reopen` moves it back to **Open**.
+A root post starts as **Open** when created with `ActionType: New`. Child posts drive status changes:
+- `Hold` moves it to **Deferred**
+- `Resolve` moves it to **Pending Review** (signals work complete, awaiting approval)
+- `Archive` moves it to **Closed** (requires ownership: creator, delegate, or Admin)
+- `Reopen` moves it back to **Open** from any non-Open status
+
+### Issue ownership
+
+Archive actions are restricted to the issue creator (`FromActorId`), the assigned delegate (`ToActorId`), or actors with the Admin role. This supports an IV&V workflow where the person who did the work cannot unilaterally close the review.
 
 ---
 
@@ -385,7 +442,8 @@ A root post starts as **Open** when created with `ActionType: New`. Child posts 
 |---|---|---|
 | GET | `/api/posts` | List and filter root posts (supports paging) |
 | GET | `/api/posts/{id}` | Single post by ID |
-| GET | `/api/posts/{id}/thread` | Full thread (root + all replies) |
+| GET | `/api/posts/{id}/thread` | Full thread (root + all replies via recursive CTE) |
+| GET | `/api/posts/latest-baton?projectId=N` | Most recent BATON post for a project |
 | POST | `/api/posts` | Create a post (issue or reply) |
 | PUT | `/api/posts/{id}` | Edit a root post (title, tags, text) |
 | GET | `/api/sessions` | List sessions (filterable, excludes archived by default) |
@@ -398,6 +456,7 @@ A root post starts as **Open** when created with `ActionType: New`. Child posts 
 | GET | `/api/projects/{id}` | Single project by ID |
 | POST | `/api/projects` | Create a project |
 | PUT | `/api/projects/{id}` | Update a project |
+| GET | `/api/projects/{id}/export/sqlite` | Export project data as SQLite file |
 | GET | `/api/actors` | List actors |
 
 ### Query parameters for `GET /api/posts`
@@ -406,7 +465,7 @@ A root post starts as **Open** when created with `ActionType: New`. Child posts 
 |---|---|
 | `projectId` | Filter by project |
 | `sessionId` | Filter by session |
-| `status` | Filter by status: `Open`, `Closed`, `Deferred` |
+| `status` | Filter by status: `Open`, `Closed`, `Deferred`, `Pending Review` |
 | `tags` | Comma-delimited tags (AND logic — all must match) |
 | `page` | Page index (enables paged response with `totalCount`) |
 | `pageSize` | Items per page (default: 10) |
@@ -425,7 +484,8 @@ Interactive API docs available at `/swagger` when the app is running.
 | Web framework | ASP.NET Core Blazor Server | 10 |
 | UI components | MudBlazor | 9 |
 | ORM | Entity Framework Core | 10 |
-| Database | SQLite (default) / SQL Server | — |
+| Database | SQL Server (primary) / SQLite | — |
+| Markdown | Markdig | 1.1.1 |
 | API docs | Swashbuckle (Swagger/OpenAPI) | 10.1.4 |
 | Tests | xUnit + WebApplicationFactory | 2.9.3 |
 | Solution format | .slnx (.NET 10) | — |

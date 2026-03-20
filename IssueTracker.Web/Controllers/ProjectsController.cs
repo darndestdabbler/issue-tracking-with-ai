@@ -1,5 +1,6 @@
 using IssueTracker.Web.Data;
 using IssueTracker.Web.Models;
+using IssueTracker.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -57,6 +58,23 @@ public class ProjectsController(AppDbContext db) : ControllerBase
             project.Name = request.Name;
         await db.SaveChangesAsync();
         return Ok(project);
+    }
+
+    /// <summary>Exports a project's data (sessions, posts, referenced actors) as a downloadable SQLite file.</summary>
+    /// <param name="id">The project ID.</param>
+    /// <param name="exportService">Injected export service.</param>
+    /// <returns>A SQLite database file.</returns>
+    /// <response code="200">SQLite file returned.</response>
+    /// <response code="404">Project not found.</response>
+    [HttpGet("{id:int}/export/sqlite")]
+    [Produces("application/octet-stream")]
+    public async Task<IActionResult> ExportSqlite(int id, [FromServices] ProjectExportService exportService)
+    {
+        var tempPath = await exportService.ExportProjectToSqliteAsync(id);
+        if (tempPath is null) return NotFound();
+
+        var stream = new FileStream(tempPath, FileMode.Open, FileAccess.Read, FileShare.None, 4096, FileOptions.DeleteOnClose);
+        return File(stream, "application/octet-stream", $"project-{id}-export.sqlite");
     }
 
     /// <summary>Request body for renaming a project.</summary>
