@@ -41,5 +41,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(p => p.ToActorId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Post → Session (restrict to avoid multiple cascade paths on SQL Server)
+        mb.Entity<Post>()
+            .HasOne(p => p.Session)
+            .WithMany(s => s.Posts)
+            .HasForeignKey(p => p.SessionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Post → Project (restrict to avoid multiple cascade paths on SQL Server)
+        mb.Entity<Post>()
+            .HasOne(p => p.Project)
+            .WithMany()
+            .HasForeignKey(p => p.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Session → Project (restrict for consistency)
+        mb.Entity<Session>()
+            .HasOne(s => s.Project)
+            .WithMany()
+            .HasForeignKey(s => s.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

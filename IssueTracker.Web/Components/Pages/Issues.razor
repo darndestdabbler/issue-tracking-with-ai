@@ -6,6 +6,7 @@
 @inject MudBlazor.ISnackbar Snackbar
 @inject MudBlazor.IDialogService DialogService
 @inject NavigationManager Nav
+@inject IConfiguration Configuration
 
 <PageTitle>Issues</PageTitle>
 
@@ -127,7 +128,18 @@
                             <MudTimelineItem Color="GetActionColor(reply.ActionType)">
                                 <MudText Typo="Typo.subtitle2">@reply.ActionType by @(reply.FromActor ?? "Unknown")</MudText>
                                 <MudText Typo="Typo.caption" Color="Color.Tertiary">@reply.DateTime.ToString("yyyy-MM-dd HH:mm:ss")</MudText>
-                                <MudText Class="mt-2">@reply.Text</MudText>
+                                @if (!string.IsNullOrWhiteSpace(reply.Text) && reply.Text.Length > truncateLength)
+                                {
+                                    <MudText Class="mt-2">@reply.Text[..truncateLength]…
+                                        <MudLink OnClick="@(() => OpenMarkdownViewer(reply.Text, $"{reply.ActionType} by {reply.FromActor}"))">View full</MudLink>
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <div class="mt-2">
+                                        <MarkdownRenderer Content="@reply.Text" />
+                                    </div>
+                                }
                             </MudTimelineItem>
                         }
                     </MudTimeline>
@@ -157,6 +169,7 @@
     private int? expandedId = null;
     private string? selectedStatus = "Open";
     private string? searchTags = "";
+    private int truncateLength;
 
     // Project/Session filter state
     private List<ProjectDto> projects = new();
@@ -169,6 +182,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        truncateLength = Configuration.GetValue("MarkdownTruncateLength", 500);
+
         // Load projects first
         projects = await Http.GetFromJsonAsync<List<ProjectDto>>("api/projects") ?? new();
 
@@ -505,6 +520,23 @@
         "Reopen" => Color.Info,
         _ => Color.Default
     };
+
+    private async Task OpenMarkdownViewer(string content, string? title = null)
+    {
+        var parameters = new MudBlazor.DialogParameters
+        {
+            { "Content", content }
+        };
+
+        var options = new MudBlazor.DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        await DialogService.ShowAsync<MarkdownViewerDialog>(title ?? "View Content", parameters, options);
+    }
 
     // PostDto, SessionDto, ActorDto provided by Components.SharedDtos.cs
 }

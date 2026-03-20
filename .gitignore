@@ -51,6 +51,12 @@ Desktop.ini
 ## Claude Code
 .claude/settings.local.json
 
+## Workspace files
+*.code-workspace
+
+## SQLite migration backup (local reference only)
+Migrations.SQLite.backup/
+
 ## Misc
 *.log
 *.tmp

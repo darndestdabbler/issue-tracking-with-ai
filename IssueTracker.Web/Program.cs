@@ -13,6 +13,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddControllers();
 builder.Services.AddMudServices();
 builder.Services.AddScoped<PostService>();
+builder.Services.AddSingleton<MarkdownService>();
 builder.Services.AddHttpClient("IssueTrackerApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"] ?? "http://localhost:5124");

@@ -34,6 +34,11 @@ public static class DatabaseSeeder
             );
             await db.SaveChangesAsync();
         }
+        else
+        {
+            // Fix roles on existing actors that still have the default "User" role
+            await FixActorRolesAsync(db);
+        }
 
         // Seed default Projects
         if (!await db.Projects.AnyAsync())
@@ -243,5 +248,34 @@ public static class DatabaseSeeder
         post6.Status = "Pending Review";
         post6.ToActorId = 2; // Delegate to Human
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ensures known actors have the correct roles. Fixes databases that were migrated
+    /// from before the Role column existed (where all actors defaulted to "User").
+    /// </summary>
+    private static async Task FixActorRolesAsync(AppDbContext db)
+    {
+        var roleMap = new Dictionary<string, string>
+        {
+            ["Claude"] = "AI",
+            ["Human"] = "Admin",
+            ["System"] = "System",
+            ["Gemini"] = "AI"
+        };
+
+        var actors = await db.Actors.Where(a => a.Role == "User").ToListAsync();
+        var updated = false;
+        foreach (var actor in actors)
+        {
+            if (roleMap.TryGetValue(actor.Name, out var correctRole))
+            {
+                actor.Role = correctRole;
+                updated = true;
+            }
+        }
+
+        if (updated)
+            await db.SaveChangesAsync();
     }
 }

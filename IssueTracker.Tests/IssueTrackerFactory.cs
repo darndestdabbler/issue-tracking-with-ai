@@ -13,13 +13,18 @@ public class IssueTrackerFactory : WebApplicationFactory<Program>, IAsyncLifetim
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseSetting("DatabaseProvider", "SQLite");
+
         builder.ConfigureServices(services =>
         {
-            // Remove the existing AppDbContext registration
-            var descriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
-            if (descriptor != null)
-                services.Remove(descriptor);
+            // Remove all AppDbContext registrations (options + provider services)
+            var descriptors = services
+                .Where(d => d.ServiceType == typeof(DbContextOptions<AppDbContext>)
+                    || d.ServiceType == typeof(DbContextOptions)
+                    || d.ServiceType.FullName?.Contains("SqlServer") == true)
+                .ToList();
+            foreach (var d in descriptors)
+                services.Remove(d);
 
             // Register AppDbContext with the shared in-memory SQLite connection
             services.AddDbContext<AppDbContext>(options =>

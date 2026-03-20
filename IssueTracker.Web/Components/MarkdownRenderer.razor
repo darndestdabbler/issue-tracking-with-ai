@@ -1,0 +1,14 @@
+@using IssueTracker.Web.Services
+@inject MarkdownService Markdown
+
+@if (!string.IsNullOrWhiteSpace(Content))
+{
+    <div class="markdown-body">
+        @((MarkupString)Markdown.ToHtml(Content))
+    </div>
+}
+
+@code {
+    /// <summary>The Markdown text to render as HTML.</summary>
+    [Parameter] public string Content { get; set; } = "";
+}
