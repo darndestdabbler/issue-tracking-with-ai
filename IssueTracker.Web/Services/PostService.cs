@@ -221,19 +221,24 @@ public class PostService(AppDbContext db)
             StringComparison.OrdinalIgnoreCase) == true;
         var cteKeyword = isSqlite ? "WITH RECURSIVE" : "WITH";
 
-        var sql = cteKeyword + """
+        // SqlQueryRaw<int> returns scalar results — no entity composition,
+        // so SQL Server doesn't reject the CTE as non-composable.
+        var idSql = cteKeyword + """
              ThreadCte AS (
                 SELECT "Id" FROM "Posts" WHERE "Id" = {0}
                 UNION ALL
                 SELECT p."Id" FROM "Posts" p
                 INNER JOIN ThreadCte t ON p."ActionForId" = t."Id"
             )
-            SELECT p.* FROM "Posts" p
-            INNER JOIN ThreadCte t ON p."Id" = t."Id"
+            SELECT t."Id" FROM ThreadCte t
             """;
 
+        var threadIds = await db.Database
+            .SqlQueryRaw<int>(idSql, rootId)
+            .ToListAsync();
+
         return await db.Posts
-            .FromSqlRaw(sql, rootId)
+            .Where(p => threadIds.Contains(p.Id))
             .Include(p => p.FromActor)
             .Include(p => p.ToActor)
             .OrderBy(p => p.DateTime)
