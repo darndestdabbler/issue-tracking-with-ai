@@ -77,6 +77,7 @@ Retrieve the latest BATON and review open issues:
 ```bash
 curl.exe -s "http://localhost:5124/api/posts/latest-baton?projectId=1"
 curl.exe -s "http://localhost:5124/api/posts?status=Open&projectId=1"
+curl.exe -s "http://localhost:5124/api/posts?status=Pending%20Review&projectId=1"
 ```
 
 ### 2. Plan the session
@@ -164,27 +165,39 @@ curl.exe -s -X POST http://localhost:5124/api/posts ^
   -d "{\"sessionId\":5, \"fromActorId\":1, \"actionType\":\"Discuss\", \"actionForId\":12, \"text\":\"Root cause found in TokenRefreshMiddleware line 47.\"}"
 ```
 
-### Example: Close an issue
+### Example: Resolve an issue (mark as Pending Review)
+
+AI actors use `Resolve` instead of `Archive` when work is complete. This sets the status to "Pending Review" and assigns it for human verification.
 
 ```bash
 curl.exe -s -X POST http://localhost:5124/api/posts ^
   -H "Content-Type: application/json" ^
-  -d "{\"sessionId\":5, \"fromActorId\":1, \"actionType\":\"Archive\", \"actionForId\":12, \"text\":\"Fixed in commit abc123. Token refresh now handles null expiry.\"}"
+  -d "{\"sessionId\":5, \"fromActorId\":1, \"actionType\":\"Resolve\", \"actionForId\":12, \"toActorId\":2, \"text\":\"Fixed in commit abc123. Token refresh now handles null expiry.\"}"
+```
+
+### Example: Close an issue (owner or Admin only)
+
+Only the issue creator, assigned delegate, or an Admin can archive. The API returns 403 if an unauthorized actor attempts this.
+
+```bash
+curl.exe -s -X POST http://localhost:5124/api/posts ^
+  -H "Content-Type: application/json" ^
+  -d "{\"sessionId\":5, \"fromActorId\":2, \"actionType\":\"Archive\", \"actionForId\":12, \"text\":\"Verified fix. Closing.\"}"
 ```
 
 ### ActionType reference
 
-| ActionType | Use when... | Status effect |
-|---|---|---|
-| New | Opening a new issue or topic | &rarr; Open |
-| Discuss | Adding commentary or investigation notes | (no change) |
-| Proceed As Is | Approving without modification | (no change) |
-| Proceed With Mods | Approving with changes (describe in text) | (no change) |
-| Check | Requesting human review (set toActorId: 2) | (no change) |
-| Hold | Pausing or deferring work | &rarr; Deferred |
-| Resolve | Marking work complete, awaiting review | &rarr; Pending Review |
-| Archive | Closing or resolving an issue | &rarr; Closed |
-| Reopen | Reopening a closed or deferred issue | &rarr; Open |
+| ActionType | Use when... | Status effect | Access control |
+|---|---|---|---|
+| New | Opening a new issue or topic | &rarr; Open | Anyone |
+| Discuss | Adding commentary or investigation notes | (no change) | Anyone |
+| Proceed As Is | Approving without modification | (no change) | Anyone |
+| Proceed With Mods | Approving with changes (describe in text) | (no change) | Anyone |
+| Check | Requesting human review (set toActorId: 2) | (no change) | Anyone |
+| Hold | Pausing or deferring work | &rarr; Deferred | Anyone |
+| Resolve | Marking work complete, awaiting review | &rarr; Pending Review | Anyone |
+| Archive | Closing an issue (verified by owner) | &rarr; Closed | Owner, delegate, Admin |
+| Reopen | Reopening a closed, deferred, or pending issue | &rarr; Open | Anyone |
 
 ---
 

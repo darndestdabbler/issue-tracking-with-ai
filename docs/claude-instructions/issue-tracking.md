@@ -55,11 +55,21 @@ curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/projects \
 
 These actor IDs are seeded in the Issue Tracker database:
 
-| Actor  | Id | Use when...                        |
-|--------|----|------------------------------------|
-| Claude | 1  | Claude is the author (fromActorId) |
-| Human  | 2  | The user is the author or reviewer |
-| System | 3  | System-generated entries           |
+| Actor  | Id | Role   | Use when...                        |
+|--------|----|---------|------------------------------------|
+| Claude | 1  | AI     | Claude is the author (fromActorId) |
+| Human  | 2  | Admin  | The user is the author or reviewer |
+| System | 3  | System | System-generated entries           |
+| Gemini | 4  | AI     | Gemini is the author               |
+
+### Issue Ownership and Archive Enforcement
+
+- **Owner** = the `fromActorId` on the root post (the actor who created the issue).
+- **Only the owner, a delegated reviewer, or an Admin** can Archive (close) an issue.
+- AI actors (Claude, Gemini) should use **Resolve** instead of Archive when they've addressed an issue. Claude should **never use Archive** directly.
+- The API returns **403 Forbidden** if a non-owner/non-Admin/non-delegate attempts to Archive.
+
+**Delegation:** When any child post includes a `toActorId`, the root post's `toActorId` is updated to track the current assignee. That assignee gains Archive authority.
 
 ---
 
@@ -81,10 +91,11 @@ The API returns the created session with its ID:
 { "id": 5, "name": "Session 013 — Feature X", "projectId": 3, "startDate": "..." }
 ```
 
-2. **Retrieve open issues** to understand what needs attention:
+2. **Retrieve open and pending-review issues** to understand what needs attention:
 
 ```bash
 curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?status=Open&projectId={{PROJECT_ID}}"
+curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?status=Pending Review&projectId={{PROJECT_ID}}"
 ```
 
 ---
@@ -96,8 +107,10 @@ Log a post when something needs to survive beyond this session:
 - A **decision** was made (actionType: `New` or `Discuss`)
 - A **blocker or open question** exists (actionType: `New`)
 - Work is **deferred** (actionType: `Hold`)
-- An item is **resolved** (actionType: `Archive`)
+- An item has been **addressed and is ready for review** (actionType: `Resolve`, toActorId: 2)
 - A **review** is requested from the user (actionType: `Check`, toActorId: 2)
+
+**Important:** Claude should use **Resolve** (not Archive) when work on an issue is complete. This sets the status to "Pending Review" and signals the human owner to verify before closing. Only issue owners and Admins can Archive.
 
 **Do not log** routine implementation steps — only things with cross-session significance.
 
@@ -123,12 +136,24 @@ curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts \
   -d "{\"sessionId\":SESSION_ID, \"fromActorId\":1, \"actionType\":\"Discuss\", \"actionForId\":POST_ID, \"text\":\"Discussion or investigation notes.\"}"
 ```
 
-### Archive (close) an issue
+### Resolve an issue (mark as Pending Review)
+
+Use this when Claude has addressed an issue. Sets status to "Pending Review".
 
 ```bash
 curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts \
   -H "Content-Type: application/json" \
-  -d "{\"sessionId\":SESSION_ID, \"fromActorId\":1, \"actionType\":\"Archive\", \"actionForId\":POST_ID, \"text\":\"Resolved. Details here.\"}"
+  -d "{\"sessionId\":SESSION_ID, \"fromActorId\":1, \"actionType\":\"Resolve\", \"actionForId\":POST_ID, \"toActorId\":2, \"text\":\"Work complete. Details here.\"}"
+```
+
+### Archive (close) an issue
+
+**Restricted:** Only the issue owner, a delegated reviewer (root post's toActorId), or an Admin can archive. Claude should use Resolve instead.
+
+```bash
+curl.exe -s -X POST {{ISSUE_TRACKER_API_URL}}/posts \
+  -H "Content-Type: application/json" \
+  -d "{\"sessionId\":SESSION_ID, \"fromActorId\":2, \"actionType\":\"Archive\", \"actionForId\":POST_ID, \"text\":\"Verified and closing.\"}"
 ```
 
 ### Hold (defer) an issue
@@ -183,16 +208,17 @@ curl.exe -s "{{ISSUE_TRACKER_API_URL}}/posts?tags=tagname&status=Open&projectId=
 
 ## ActionType Reference
 
-| ActionType        | Use when...                                          | Status effect on root |
-|-------------------|------------------------------------------------------|-----------------------|
-| New               | Opening a new issue or topic                         | → Open                |
-| Discuss           | Adding commentary or investigation notes             | (no change)           |
-| Proceed As Is     | Approving something without modification             | (no change)           |
-| Proceed With Mods | Approving with changes (describe in Text)            | (no change)           |
-| Check             | Requesting the user to review (set toActorId: 2)    | (no change)           |
-| Hold              | Pausing/deferring work                               | → Deferred            |
-| Archive           | Closing/resolving an issue                           | → Closed              |
-| Reopen            | Reopening a closed or deferred issue                 | → Open                |
+| ActionType        | Use when...                                          | Status effect on root | Access control       |
+|-------------------|------------------------------------------------------|-----------------------|----------------------|
+| New               | Opening a new issue or topic                         | → Open                | Anyone               |
+| Discuss           | Adding commentary or investigation notes             | (no change)           | Anyone               |
+| Proceed As Is     | Approving something without modification             | (no change)           | Anyone               |
+| Proceed With Mods | Approving with changes (describe in Text)            | (no change)           | Anyone               |
+| Check             | Requesting the user to review (set toActorId: 2)    | (no change)           | Anyone               |
+| Resolve           | Work complete, requesting owner/Admin review         | → Pending Review      | Anyone               |
+| Hold              | Pausing/deferring work                               | → Deferred            | Anyone               |
+| Archive           | Closing/resolving an issue (verified by owner)       | → Closed              | Owner, delegate, Admin |
+| Reopen            | Reopening a closed, deferred, or pending issue       | → Open                | Anyone               |
 
 ---
 
