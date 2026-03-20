@@ -80,8 +80,40 @@ cd "c:\Users\denmi\source\repos\issue-tracking-with-ai"
 dotnet test
 ```
 
-To re-seed: delete `IssueTracker.Web/issuetracker.db` and restart.
+To apply the migration to an existing database (preserves all data):
+```bash
+cd "c:\Users\denmi\source\repos\issue-tracking-with-ai"
+dotnet ef database update --project IssueTracker.Web
+```
+
+Then update existing actor roles:
+```sql
+UPDATE Actors SET Role='AI' WHERE Name IN ('Claude','Gemini');
+UPDATE Actors SET Role='Admin' WHERE Name='Human';
+UPDATE Actors SET Role='System' WHERE Name='System';
+```
+
+To re-seed from scratch (WARNING: destroys all data): delete `IssueTracker.Web/issuetracker.db` and restart.
 
 ---
 
-*Load this BATON at the start of Session 014. Recommended focus: Update README (#23) to document ownership model and Resolve workflow, then Home page (#26).*
+## Planned Enhancements
+
+### BATONs as Issues
+Store BATONs as Issue Tracker posts rather than markdown files in each project repo. Benefits:
+- **Centralization** — BATONs live in the same system as issues
+- **Simpler AI workflow** — Just retrieve open issues at session start; the latest BATON is among them
+- **Less clutter** — No more `docs/batons/` directories in every project; uniform handling across projects
+
+### Markdown Viewer for Long Issues
+Issues longer than 200 characters should display with an ellipsis hyperlink. Clicking it opens a **modal, sizable, scrollable Markdown viewer** that renders the full content as HTML. Consider using [Markdig](https://github.com/xoofx/markdig) for Markdown-to-HTML conversion. The Post.Text column should be changed to `varchar(max)` (or `TEXT` in SQLite) to accommodate full BATON content and lengthy issue descriptions.
+
+### Project Export to SQLite
+Add the ability to export all issues for a given project to a standalone SQLite database file, suitable for storing alongside the project in git. Useful for:
+- Archiving issue history when a project is closed
+- Portable offline access to project issues
+- Version-controlled issue snapshots
+
+---
+
+*Load this BATON at the start of Session 014. Recommended focus: BATONs-as-issues feature (markdown viewer + varchar(max) + Markdig), then README (#23).*
